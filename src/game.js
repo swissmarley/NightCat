@@ -1,24 +1,33 @@
-// Game state machine, fixed-step physics, camera, and the render loop.
+// Game flow (title → select → ready → run → dead | clear), fixed-step physics,
+// camera, stage loading and the render loop.
 import * as THREE from 'three';
 import { Cat } from './cat.js';
-import { buildLevel, STREET_Y } from './level.js';
+import { buildLevel, resetCheckpoints, activateCheckpoint } from './level.js';
 import { World } from './world.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { UI } from './ui.js';
-import { makeRng, brickTexture, stoneTexture, asphaltMaps, glowTexture, woodTexture } from './textures.js';
+import { STAGES, stageById } from './stages.js';
+import { streetTheme } from './themes/street.js';
+import { shrineTheme } from './themes/shrine.js';
+import { loadSave, storeSave, recordRun } from './save.js';
+import { makeRng, glowTexture, mistTexture } from './textures.js';
+
+const THEMES = { street: streetTheme, shrine: shrineTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
 const JUMP_V = 11.5;
 const JUMP_CUT_V = 4.0;
+const DIVE_V = -13;
 const COYOTE = 0.1;
 const BUFFER = 0.13;
 const STEP_TOL = 0.35; // small ledges are climbed automatically; anything taller is a wall
 const FOOT = 0.22; // half the foot span used for support
 const BODY = 0.3; // half the body length used for obstacles/walls
-const BASE_SPEED = 7.0;
-const SPEED_GAIN = 1.6;
+const STAND_H = 0.55;
+const SLIDE_H = 0.28;
+const DIVE_H = 0.45;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
@@ -28,10 +37,14 @@ export class Game {
     this.container = container;
     this.params = new URLSearchParams(location.search);
     this.autopilot = this.params.has('auto');
+    this.save = loadSave();
+
+    this.input = new Input(container);
+    this.quality = this.detectQuality();
 
     // --- renderer -------------------------------------------------------
     const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setPixelRatio(this.quality.pixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -39,92 +52,200 @@ export class Game {
     renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
-
-    this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 160);
 
-    // --- content --------------------------------------------------------
-    const rng = makeRng(20261013);
-    this.tex = {
-      brick: brickTexture(rng),
-      stone: stoneTexture(rng),
-      asphalt: asphaltMaps(rng),
-      glow: glowTexture(),
-      wood: woodTexture(rng),
-    };
-    this.level = buildLevel(this.scene, this.tex, rng);
-    this.world = new World(this.scene, renderer, this.camera, this.level, this.tex, rng);
-    this.cat = new Cat();
-    this.scene.add(this.cat.group);
-
-    this.input = new Input(renderer.domElement);
     this.sfx = new Sfx();
+    this.sfx.muted = !!this.save.muted;
     this.ui = new UI();
+    this.ui.setTouch(this.input.touch);
+    this.ui.setMuted(this.sfx.muted);
     this.input.onFirstInteraction = () => this.sfx.ensure();
+    this.ui.onCard = (i) => {
+      if (this.state !== 'select') return;
+      this.selected = i;
+      this.ui.setSelected(i);
+      this.input.clearEdges();
+      this.enterStage(STAGES[i].id);
+    };
+    this.ui.el.btnSound.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleMute();
+    });
+    this.ui.el.btnFull.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleFullscreen();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.state === 'run') this.setState('paused');
+    });
+
+    this.cat = new Cat();
+    this.sharedTex = { glow: glowTexture(), mist: mistTexture() };
+    this.sharedTex.shared = new Set([this.sharedTex.glow, this.sharedTex.mist]);
 
     // --- state ----------------------------------------------------------
     this.t = 0;
     this.acc = 0;
     this.last = performance.now();
-    this.cam = { x: 0, y: 2.4, z: 10.5, lookY: 1.0, lookX: 0 };
-    this.p = {}; // player physics
-    this.resetRun();
-    this.setState('title');
+    this.timeScale = 1;
+    this.slowmo = 0;
+    this.shake = 0;
+    this.cam = { x: 0, y: 2.6, z: 7.8, lookY: 0.55, lookX: 0 };
+    this.p = {};
+    this.selected = 0;
+    this.frameTimes = [];
+    this.frameClock = 0;
+    this.stage = null;
+    this.world = null;
+
+    const initial = Number(this.params.get('stage')) || STAGES[0].id;
+    this.loadStage(initial);
+    this.ui.buildCards(STAGES, this.save.records);
+    this.setState(this.params.has('stage') ? 'ready' : 'title');
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
-
-    // debug / test hooks
     window.__catwalk = this;
+  }
+
+  detectQuality() {
+    const touch = this.input.touch;
+    const small = Math.min(screen.width, screen.height) <= 600; // phones; tablets get the medium tier
+    const dpr = window.devicePixelRatio || 1;
+    if (touch && small) {
+      return { tier: 'low', pixelRatio: Math.min(dpr, 1.25), msaa: 2, bloomScale: 0.5, waterRes: 256, particles: 0.6, lights: 6, shadow: 1024 };
+    }
+    if (touch) {
+      return { tier: 'medium', pixelRatio: Math.min(dpr, 1.5), msaa: 4, bloomScale: 0.75, waterRes: 384, particles: 0.8, lights: 8, shadow: 1024 };
+    }
+    return { tier: 'high', pixelRatio: Math.min(dpr, 1.5), msaa: 4, bloomScale: 1, waterRes: 512, particles: 1, lights: 8, shadow: 1024 };
   }
 
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.updateFov();
     this.renderer.setSize(w, h);
-    this.world.resize(w, h);
+    this.world?.resize(w, h);
   }
 
-  // --- state ------------------------------------------------------------
-  resetRun() {
+  /** Keep a steady horizontal field of view so portrait phones still see ahead. */
+  updateFov(speedBoost = 0) {
+    const hFov = THREE.MathUtils.degToRad(62 + speedBoost);
+    const v = 2 * Math.atan(Math.tan(hFov / 2) / this.camera.aspect);
+    this.camera.fov = clamp(THREE.MathUtils.radToDeg(v), 36, 96);
+    this.camera.updateProjectionMatrix();
+  }
+
+  toggleMute() {
+    this.sfx.ensure();
+    this.sfx.setMuted(!this.sfx.muted);
+    this.ui.setMuted(this.sfx.muted);
+    this.save.muted = this.sfx.muted;
+    storeSave(this.save);
+  }
+
+  toggleFullscreen() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  }
+
+  // --- stage loading ----------------------------------------------------
+  loadStage(id) {
+    const stage = stageById(id);
+    if (this.world) {
+      this.scene.remove(this.cat.group);
+      this.world.dispose();
+    }
+    this.stage = stage;
+    this.theme = THEMES[stage.theme];
+    this.scene = new THREE.Scene();
+    const rng = makeRng(stage.seed);
+    this.tex = { ...this.sharedTex, ...this.theme.makeTextures(rng) };
+    this.level = buildLevel(this.scene, stage, this.theme, this.tex, rng);
+    this.world = new World(this.scene, this.renderer, this.camera, this.level, this.theme, this.tex, rng, this.quality);
+    this.scene.add(this.cat.group);
+    this.world.resize(window.innerWidth, window.innerHeight);
+    this.sfx.setAmbience(this.theme.ambience);
+    this.ui.setTicks(this.level.checkpoints.map((cp) => cp.x / this.level.goalX));
+    this.resetRun(false);
+    this.cam.x = this.p.x + 1.4;
+    this.cam.lookX = this.cam.x;
+  }
+
+  controlsHint() {
+    return this.input.touch
+      ? 'tap right to jump · tap left to slide · hold for height'
+      : '<kbd>space</kbd> jump · <kbd>↓</kbd> slide · hold to jump higher';
+  }
+
+  enterStage(id) {
+    this.ui.fadeOut(true);
+    setTimeout(() => {
+      if (this.stage.id !== id) this.loadStage(id);
+      else this.resetRun(false);
+      this.setState('ready');
+      this.ui.fadeIn(true);
+    }, 380);
+    this.state = 'loading';
+  }
+
+  // --- run state ----------------------------------------------------------
+  resetRun(fromCheckpoint) {
     const p = this.p;
-    p.x = this.level.startX;
-    p.y = 0;
+    const cp = fromCheckpoint ? p.checkpoint : null;
+    p.x = cp ? cp.x + 0.6 : this.level.startX;
+    p.y = cp ? cp.top : 0;
     p.vy = 0;
     p.vx = 0;
     p.grounded = true;
     p.coyote = 0;
     p.buffer = 0;
-    p.groundY = 0;
-    p.sparks = 0;
-    p.runTime = 0;
+    p.groundY = p.y;
+    p.sliding = false;
+    p.diving = false;
+    p.forceSlide = 0;
     p.deathKind = null;
     p.deathT = 0;
-    p.clearT = 0;
     p.rot = 0;
     p.autoHold = 0;
+    if (!fromCheckpoint) {
+      p.sparks = 0;
+      p.runTime = 0;
+      p.deaths = 0;
+      p.checkpoint = null;
+      resetCheckpoints(this.level);
+      this.world.resetSparks();
+    }
     this.cat.reset();
-    this.world.resetSparks();
-    this.ui.setSparks(0);
-    this.ui.setProgress(0);
+    this.ui.setSparks(p.sparks, this.world.sparks.length);
+    this.ui.setTime(p.runTime);
+    this.ui.setProgress(p.x / this.level.goalX);
   }
 
   setState(s) {
     this.state = s;
     this.stateT = 0;
+    this.input.clearEdges();
     if (s === 'title') {
       this.ui.showTitle();
       this.ui.fadeIn(false);
+    } else if (s === 'select') {
+      this.ui.buildCards(STAGES, this.save.records);
+      this.ui.showSelect(this.selected);
+    } else if (s === 'ready') {
+      this.ui.showReady(this.stage, `${this.controlsHint()}<br><span class="go">press to run</span>`);
     } else if (s === 'run') {
       this.ui.showRun();
-      this.ui.fadeIn(true);
+    } else if (s === 'paused') {
+      this.ui.showPause(true);
+      this.sfx.pause();
     }
   }
 
   startRun() {
-    this.resetRun();
     this.setState('run');
     this.sfx.start();
   }
@@ -133,12 +254,17 @@ export class Game {
     const p = this.p;
     p.deathKind = kind;
     p.deathT = 0;
+    p.deaths++;
+    p.sliding = false;
     p.vx = kind === 'hit' ? -1.6 : this.speedAt(p.x) * 0.5;
     if (kind === 'hit') {
       p.vy = 5.5;
       p.grounded = false;
       this.ui.flash();
       this.sfx.hit();
+      this.shake = 0.45;
+      this.slowmo = 0.5;
+      this.world.puff(p.x, p.y, 8, 1.3);
     } else {
       this.sfx.fall();
     }
@@ -148,19 +274,29 @@ export class Game {
   clearStage() {
     const p = this.p;
     p.vx = this.speedAt(p.x);
-    p.clearT = 0;
+    p.sliding = false;
+    const total = this.world.sparks.length;
+    const rank = p.deaths === 0 && p.sparks === total ? 'S' : p.deaths === 0 ? 'A' : p.deaths <= 2 ? 'B' : 'C';
+    const record = recordRun(this.save, this.stage.id, { time: p.runTime, sparks: p.sparks, sparksTotal: total, rank });
+    this.result = { rank, time: p.runTime, sparks: p.sparks, total, deaths: p.deaths, record, hasNext: !!this.nextStage() };
     this.setState('clear');
     this.sfx.clear();
   }
 
+  nextStage() {
+    const i = STAGES.findIndex((s) => s.id === this.stage.id);
+    return STAGES[i + 1] || null;
+  }
+
   speedAt(x) {
-    return BASE_SPEED + SPEED_GAIN * clamp(x / this.level.goalX, 0, 1);
+    return this.stage.baseSpeed + this.stage.speedGain * clamp(x / this.level.goalX, 0, 1);
   }
 
   // --- physics (fixed step) ------------------------------------------------
   stepRun(h) {
     const p = this.p;
     const level = this.level;
+    const input = this.input;
     p.runTime += h;
     const speed = this.speedAt(p.x);
     p.vx = speed;
@@ -168,32 +304,46 @@ export class Game {
 
     if (this.autopilot) this.runAutopilot(h);
 
-    // jump input
-    if (this.input.consumePress()) p.buffer = BUFFER;
+    // slide / dive
+    if (p.forceSlide > 0) p.forceSlide -= h;
+    const wantSlide = input.slideHeld || p.forceSlide > 0;
+    if (p.grounded) {
+      if (wantSlide && !p.sliding) this.sfx.slide();
+      p.sliding = wantSlide;
+    } else if (input.consume('slide') && !p.diving) {
+      p.diving = true;
+      p.vy = Math.min(p.vy, DIVE_V);
+      this.sfx.dive();
+    }
+
+    // jump
+    if (input.consume('jump')) p.buffer = BUFFER;
     if (p.buffer > 0 && (p.grounded || p.coyote > 0)) {
       p.vy = JUMP_V;
       p.grounded = false;
+      p.sliding = false;
+      p.forceSlide = 0;
       p.coyote = 0;
       p.buffer = 0;
       this.cat.onJump();
       this.sfx.jump();
+      this.world.puff(p.x - 0.2, p.y, 3, 0.6);
     } else if (p.buffer > 0) p.buffer -= h;
     if (!p.grounded && p.coyote > 0) p.coyote -= h;
 
     const prevY = p.y;
     if (!p.grounded) {
-      if (!this.input.held && p.vy > JUMP_CUT_V) p.vy = JUMP_CUT_V;
+      if (!input.jumpHeld && p.vy > JUMP_CUT_V) p.vy = JUMP_CUT_V;
       p.vy -= GRAVITY * h;
       p.y += p.vy * h;
     }
 
     // walls: running face-first into the leading edge of a platform whose top is
-    // well above the feet (only the leading edge counts, so stepping down off a
-    // ledge never collides with the wall just left behind)
+    // well above the feet (only the leading edge counts)
     for (const pl of level.platforms) {
       if (pl.top > p.y + STEP_TOL && pl.x0 < p.x + BODY && pl.x0 >= p.x - BODY) {
         p.x = pl.x0 - BODY - 0.02;
-        p.groundY = Math.max(STREET_Y, p.groundY);
+        p.groundY = Math.max(level.floorY, p.groundY);
         this.die('hit');
         return;
       }
@@ -207,6 +357,7 @@ export class Game {
       }
       if (top === -Infinity) {
         p.grounded = false;
+        p.sliding = false;
         p.coyote = COYOTE;
         p.vy = 0;
       } else {
@@ -214,34 +365,44 @@ export class Game {
         p.groundY = top;
       }
     } else if (p.vy <= 0) {
-      // land when the feet cross a top this step; a near miss within STEP_TOL
-      // below the ledge counts too (a cat always finds the ledge)
+      // land when the feet cross a top this step; a near miss just below the ledge counts too
       let top = -Infinity;
       for (const pl of level.platforms) {
-        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && pl.top <= prevY + STEP_TOL && pl.top >= p.y) {
-          top = Math.max(top, pl.top);
-        }
+        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && pl.top <= prevY + STEP_TOL && pl.top >= p.y) top = Math.max(top, pl.top);
       }
       if (top > -Infinity) {
+        const impact = -p.vy;
         p.y = top;
         p.groundY = top;
         p.vy = 0;
         p.grounded = true;
+        if (p.diving) {
+          p.diving = false;
+          p.forceSlide = 0.28;
+          this.shake = Math.max(this.shake, 0.12);
+        }
         this.cat.onLand();
-        this.sfx.land();
+        this.sfx.land(clamp(impact / 14, 0.3, 1.2));
+        this.world.puff(p.x, p.y, impact > 11 ? 8 : 5, clamp(impact / 12, 0.6, 1.4));
       }
     }
 
-    // obstacles
+    // obstacles (ground) and hanging obstacles
+    const hb = p.sliding ? SLIDE_H : p.diving ? DIVE_H : STAND_H;
     const cx0 = p.x - BODY + 0.05;
     const cx1 = p.x + BODY - 0.05;
     const cy0 = p.y + 0.06;
-    const cy1 = p.y + 0.55;
+    const cy1 = p.y + hb;
     for (const o of level.obstacles) {
       if (Math.abs(o.x - p.x) > 2) continue;
-      const ox0 = o.x - o.w / 2;
-      const ox1 = o.x + o.w / 2;
-      if (cx1 > ox0 && cx0 < ox1 && cy1 > o.y && cy0 < o.y + o.h) {
+      if (cx1 > o.x - o.w / 2 && cx0 < o.x + o.w / 2 && cy1 > o.y && cy0 < o.y + o.h) {
+        this.die('hit');
+        return;
+      }
+    }
+    for (const o of level.hangers) {
+      if (Math.abs(o.x - p.x) > 2.5) continue;
+      if (cx1 > o.x - o.w / 2 && cx0 < o.x + o.w / 2 && cy1 > o.y0 && cy0 < o.y1) {
         this.die('hit');
         return;
       }
@@ -249,10 +410,10 @@ export class Game {
 
     // sparks
     for (const s of this.world.sparks) {
-      if (!s.alive) continue;
+      if (!s.alive || Math.abs(s.x - p.x) > 1) continue;
       const dx = s.x - p.x;
-      const dy = s.group.position.y - (p.y + 0.38);
-      if (dx * dx + dy * dy < 0.6 * 0.6) {
+      const dy = s.group.position.y - (p.y + (p.sliding ? 0.2 : 0.38));
+      if (dx * dx + dy * dy < 0.62 * 0.62) {
         this.world.collectSpark(s);
         p.sparks++;
         this.ui.setSparks(p.sparks);
@@ -260,9 +421,20 @@ export class Game {
       }
     }
 
+    // checkpoints
+    for (const cp of level.checkpoints) {
+      if (!cp.active && p.x >= cp.x) {
+        activateCheckpoint(cp);
+        p.checkpoint = cp;
+        this.sfx.checkpoint();
+        this.ui.toast('the lantern remembers you');
+        this.world.puff(cp.x, cp.top + 1.3, 6, 0.9, this.theme.colors.cp);
+      }
+    }
+
     // fell off the walk
     if (!p.grounded && p.y < -1.1) {
-      p.groundY = STREET_Y;
+      p.groundY = level.floorY;
       this.die('fall');
       return;
     }
@@ -273,13 +445,21 @@ export class Game {
   runAutopilot(h) {
     const p = this.p;
     const level = this.level;
+    const input = this.input;
+    // slide under anything hanging close ahead
+    let wantSlide = false;
+    for (const o of level.hangers) {
+      if (p.x > o.x - o.w / 2 - 0.9 && p.x < o.x + o.w / 2 + 0.35) wantSlide = true;
+    }
+    input.slideHeld = wantSlide;
     if (!p.grounded) {
       p.autoHold -= h;
-      this.input.held = p.autoHold > 0;
+      input.jumpHeld = p.autoHold > 0;
       return;
     }
+    if (wantSlide) return;
     let hazard = Infinity;
-    let hold = 0.45; // full jump unless a shorter hop is clearly enough
+    let hold = 0.45;
     const cur = level.platforms.find((pl) => pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL);
     if (cur) {
       const next = level.platforms.find((pl) => pl.x0 >= cur.x1 - 0.01);
@@ -288,7 +468,6 @@ export class Game {
       else if (gapAhead && next) {
         hazard = Math.min(hazard, cur.x1 - 0.3); // gap
         if (next.top <= cur.top) {
-          // hop just far enough: ~1.9u with a tap, ~5.5u with a full hold
           const need = next.x0 - cur.x1 + 1.2;
           hold = clamp(((need - 1.9) / 3.6) * 0.45, 0.06, 0.45);
         }
@@ -302,8 +481,8 @@ export class Game {
       }
     }
     if (p.x >= hazard) {
-      this.input.pressed = true;
-      this.input.held = true;
+      input._edges.jump = true;
+      input.jumpHeld = true;
       p.autoHold = hold;
     }
   }
@@ -317,20 +496,25 @@ export class Game {
       p.vy -= GRAVITY * h;
       p.y += p.vy * h;
       if (p.deathKind === 'hit') p.rot -= 6 * h;
-      const floor = p.deathKind === 'fall' ? STREET_Y : p.groundY;
+      const floor = p.deathKind === 'fall' ? this.level.floorY + 0.1 : p.groundY;
       if (p.y <= floor) {
         p.y = floor;
         p.vy = 0;
         p.grounded = true;
         this.cat.onLand();
-        this.sfx.land();
+        if (p.deathKind === 'fall' && this.theme.key === 'shrine') {
+          this.sfx.splash();
+          this.world.puff(p.x, p.y, 10, 1.6, 0x8fc0d0);
+        } else {
+          this.sfx.land();
+          this.world.puff(p.x, p.y, 6, 1);
+        }
       }
     }
   }
 
   stepClear(h) {
     const p = this.p;
-    p.clearT += h;
     p.vx = Math.max(0, p.vx - 7 * h);
     p.x += p.vx * h;
     if (!p.grounded) {
@@ -345,29 +529,33 @@ export class Game {
     }
   }
 
-  /**
-   * Headless check used by the test harness: runs the autopilot through the
-   * stage without rendering and reports where it ended up.
-   */
-  simulate(maxSeconds = 240) {
+  /** Headless check: runs the autopilot through a stage without rendering. */
+  simulate(stageId = this.stage.id, maxSeconds = 300) {
+    if (this.stage.id !== stageId) this.loadStage(stageId);
     const wasAuto = this.autopilot;
     this.autopilot = true;
-    this.resetRun();
+    this.resetRun(false);
     this.setState('run');
     let t = 0;
     const trace = [];
     let wasGrounded = true;
+    let wasSliding = false;
     while (this.state === 'run' && t < maxSeconds) {
       this.stepRun(STEP);
       t += STEP;
-      if (this.p.grounded !== wasGrounded) {
-        wasGrounded = this.p.grounded;
-        trace.push(`${wasGrounded ? 'land' : 'jump'}@${this.p.x.toFixed(1)},${this.p.y.toFixed(2)}`);
+      const p = this.p;
+      if (p.grounded !== wasGrounded) {
+        wasGrounded = p.grounded;
+        trace.push(`${wasGrounded ? 'land' : 'jump'}@${p.x.toFixed(1)},${p.y.toFixed(2)}`);
+      }
+      if (p.sliding !== wasSliding) {
+        wasSliding = p.sliding;
+        if (wasSliding) trace.push(`slide@${p.x.toFixed(1)}`);
       }
     }
     this.autopilot = wasAuto;
     const p = this.p;
-    return { state: this.state, x: p.x, y: p.y, goal: this.level.goalX, kind: p.deathKind, sparks: p.sparks, time: p.runTime, trace };
+    return { stage: stageId, state: this.state, x: p.x, y: p.y, goal: this.level.goalX, kind: p.deathKind, sparks: p.sparks, total: this.world.sparks.length, time: p.runTime, trace };
   }
 
   // --- frame ---------------------------------------------------------------
@@ -376,44 +564,131 @@ export class Game {
       requestAnimationFrame(loop);
       const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
       this.last = now;
-      this.frame(dt);
+      this.frame(dt, now);
     };
     requestAnimationFrame(loop);
   }
 
-  frame(dt) {
+  /** Drop render resolution if the device cannot keep up. */
+  adaptResolution(dt) {
+    this.frameTimes.push(dt);
+    this.frameClock += dt;
+    if (this.frameClock < 3) return;
+    const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+    this.frameTimes = [];
+    this.frameClock = 0;
+    const pr = this.renderer.getPixelRatio();
+    if (avg > 0.024 && pr > 0.75) {
+      this.renderer.setPixelRatio(Math.max(0.75, pr - 0.25));
+      this.resize();
+    }
+  }
+
+  frame(dt, now) {
     this.t += dt;
     this.stateT += dt;
     const p = this.p;
+    const input = this.input;
+    if (this.state === 'run') this.adaptResolution(dt);
 
-    if (this.input.consumeMute()) {
-      this.sfx.setMuted(!this.sfx.muted);
-      this.ui.setMuted(this.sfx.muted);
+    if (input.consume('mute')) this.toggleMute();
+
+    // --- flow ---------------------------------------------------------------
+    switch (this.state) {
+      case 'title':
+        if (input.consume('any')) {
+          this.sfx.tick();
+          this.setState('select');
+        }
+        break;
+      case 'select': {
+        if (input.consume('left')) {
+          this.selected = (this.selected + STAGES.length - 1) % STAGES.length;
+          this.ui.setSelected(this.selected);
+          this.sfx.tick();
+        }
+        if (input.consume('right')) {
+          this.selected = (this.selected + 1) % STAGES.length;
+          this.ui.setSelected(this.selected);
+          this.sfx.tick();
+        }
+        if (input.consume('back')) this.setState('title');
+        else if (input.consume('confirm')) this.enterStage(STAGES[this.selected].id);
+        break;
+      }
+      case 'ready':
+        if (input.consume('back')) this.setState('select');
+        else if (input.consume('any')) this.startRun();
+        break;
+      case 'run':
+        if (input.consume('pause') || input.consume('back')) this.setState('paused');
+        else if (input.consume('restart')) {
+          this.resetRun(false);
+          this.setState('ready');
+        }
+        break;
+      case 'paused':
+        if (input.consume('back')) {
+          this.ui.showPause(false);
+          this.resetRun(false);
+          this.setState('select');
+        } else if (input.consume('confirm') || input.consume('pause')) {
+          this.ui.showPause(false);
+          this.state = 'run';
+          this.input.clearEdges();
+        }
+        break;
+      case 'dead': {
+        const shown = this.ui.el.gameover.classList.contains('visible');
+        if (this.stateT > 1.1 && !shown) {
+          const pct = Math.round(clamp(p.x / this.level.goalX, 0, 1) * 100);
+          this.ui.showGameOver(p.deathKind, `${pct}% of the way · ${p.sparks} sparks`, !!p.checkpoint);
+        }
+        if (shown) {
+          if (input.consume('back')) {
+            this.resetRun(false);
+            this.setState('select');
+          } else if (input.consume('restart')) {
+            this.resetRun(false);
+            this.setState('ready');
+          } else if (input.consume('any')) {
+            this.resetRun(!!p.checkpoint);
+            this.ui.fadeIn(true);
+            this.startRun();
+          }
+        }
+        break;
+      }
+      case 'clear': {
+        const shown = this.ui.el.clear.classList.contains('visible');
+        if (this.stateT > 2.2 && !shown) this.ui.showClear(this.result);
+        if (shown) {
+          if (input.consume('back')) {
+            this.resetRun(false);
+            this.setState('select');
+          } else if (input.consume('any')) {
+            const next = this.nextStage();
+            if (next) {
+              this.selected = STAGES.indexOf(next);
+              this.enterStage(next.id);
+            } else this.enterStage(this.stage.id);
+          }
+        }
+        break;
+      }
+      default:
+        break;
     }
 
-    // state transitions driven by "any press"
-    if (this.state === 'title') {
-      if (this.input.consumeAny()) this.startRun();
-    } else if (this.state === 'dead') {
-      if (this.stateT > 1.2 && this.input.consumeAny()) this.startRun();
-      else if (this.stateT > 1.2 && !this.ui.el.gameover.classList.contains('visible')) {
-        const pct = Math.round(clamp(p.x / this.level.goalX, 0, 1) * 100);
-        this.ui.showGameOver(p.deathKind, `${pct}% of the way · ${p.sparks} sparks`);
-      }
-      this.input.consumeAny();
-    } else if (this.state === 'clear') {
-      if (this.stateT > 2.2 && !this.ui.el.clear.classList.contains('visible')) {
-        this.ui.showClear(`${p.runTime.toFixed(1)}s · ${p.sparks} / ${this.world.sparks.length} sparks`);
-      }
-      if (this.stateT > 2.4 && this.input.consumeAny()) this.startRun();
-      else this.input.consumeAny();
-    } else {
-      this.input.consumeAny();
-    }
+    // --- simulation --------------------------------------------------------
+    if (this.slowmo > 0) {
+      this.slowmo -= dt;
+      this.timeScale = damp(this.timeScale, 0.3, 14, dt);
+    } else this.timeScale = damp(this.timeScale, 1, 6, dt);
+    const sdt = dt * this.timeScale;
 
-    // fixed-step simulation
     if (this.state === 'run' || this.state === 'dead' || this.state === 'clear') {
-      this.acc += dt;
+      this.acc += sdt;
       let guard = 0;
       while (this.acc >= STEP && guard++ < 12) {
         this.acc -= STEP;
@@ -421,26 +696,28 @@ export class Game {
         else if (this.state === 'dead') this.stepDead(STEP);
         else if (this.state === 'clear') this.stepClear(STEP);
       }
-      this.input.consumePress();
-    } else {
-      this.acc = 0;
+    } else this.acc = 0;
+    // one-shot presses live for exactly one frame (the physics above consumes jump/slide)
+    input.clearEdges();
+
+    if (this.state === 'run') {
+      this.ui.setProgress(p.x / this.level.goalX);
+      this.ui.setTime(p.runTime);
     }
 
-    if (this.state === 'run') this.ui.setProgress(p.x / this.level.goalX);
-
-    // cat pose
+    // --- cat pose ---------------------------------------------------------
     let mode = 'idle';
-    if (this.state === 'run') mode = p.grounded ? 'run' : 'air';
-    else if (this.state === 'dead') mode = p.deathKind === 'hit' ? 'dead' : p.grounded ? 'sit' : 'air';
+    if (this.state === 'run' || this.state === 'paused') {
+      mode = p.grounded ? (p.sliding ? 'slide' : 'run') : p.diving ? 'dive' : 'air';
+    } else if (this.state === 'dead') mode = p.deathKind === 'hit' ? 'dead' : p.grounded ? 'sit' : 'air';
     else if (this.state === 'clear') mode = p.vx > 0.3 ? (p.grounded ? 'run' : 'air') : 'sit';
     this.cat.group.position.set(p.x, p.y, 0);
     this.cat.group.rotation.z = p.rot;
-    this.cat.update(dt, { mode, vy: p.vy, speed: Math.max(p.vx, 2), t: this.t });
+    const animDt = this.state === 'paused' ? 0 : sdt;
+    this.cat.update(animDt, { mode, vy: p.vy, speed: Math.max(p.vx, 2), t: this.t });
 
-    // camera
     this.updateCamera(dt);
-
-    this.world.update(dt, p.x, p.y, this.camera.position.x);
+    this.world.update(this.state === 'paused' ? 0 : sdt, p.x, p.y, this.camera.position.x);
     this.world.render();
   }
 
@@ -448,18 +725,19 @@ export class Game {
     const p = this.p;
     const c = this.cam;
     let tx, ty, tz, lookX, lookY;
-    if (this.state === 'title') {
+    const gy = p.groundY * 0.5;
+    if (this.state === 'title' || this.state === 'ready' || this.state === 'select' || this.state === 'loading') {
       tx = p.x + 1.4;
-      ty = 2.6;
+      ty = 2.6 + gy;
       tz = 7.8;
       lookX = p.x + 1.4;
-      lookY = 0.55;
+      lookY = 0.55 + gy;
     } else if (this.state === 'clear') {
       tx = p.x + 1.0;
-      ty = 2.4 + p.groundY * 0.5;
+      ty = 2.4 + gy;
       tz = 7.2;
       lookX = p.x + 1.0;
-      lookY = 0.5 + p.groundY * 0.5;
+      lookY = 0.5 + gy;
     } else if (this.state === 'dead') {
       tx = c.x;
       ty = c.y;
@@ -468,18 +746,25 @@ export class Game {
       lookY = c.lookY;
     } else {
       tx = p.x + 3.0;
-      ty = 3.9 + p.groundY * 0.5;
+      ty = 3.9 + gy;
       tz = 11.0;
       lookX = p.x + 3.0;
-      lookY = 0.65 + p.groundY * 0.5;
+      lookY = 0.65 + gy;
     }
-    const kx = this.state === 'run' ? 30 : 3;
+    const kx = this.state === 'run' || this.state === 'paused' ? 30 : 3;
     c.x = damp(c.x, tx, kx, dt);
     c.y = damp(c.y, ty, 3, dt);
     c.z = damp(c.z, tz, 2.5, dt);
     c.lookX = damp(c.lookX, lookX, kx, dt);
     c.lookY = damp(c.lookY, lookY, 3, dt);
-    this.camera.position.set(c.x, c.y, c.z);
-    this.camera.lookAt(c.lookX, c.lookY, 0);
+
+    this.shake = Math.max(0, this.shake - dt * 1.4);
+    const sx = (Math.random() - 0.5) * this.shake * 0.5;
+    const sy = (Math.random() - 0.5) * this.shake * 0.5;
+    this.camera.position.set(c.x + sx, c.y + sy, c.z);
+    this.camera.lookAt(c.lookX + sx, c.lookY + sy, 0);
+
+    const boost = this.state === 'run' ? (p.vx - 7) * 1.1 : 0;
+    this.updateFov(boost);
   }
 }

@@ -59,6 +59,10 @@ class Leg {
   }
 }
 
+// Base tail curve: lifts up and back, tip curls slightly.
+const TAIL_BASE = [-0.75, -0.3, -0.12, 0.0, 0.08, 0.12, 0.14, 0.12];
+const TAIL_SIT = [0.95, 0.55, 0.25, 0.05, -0.1, -0.2, -0.2, -0.1];
+
 export class Cat {
   constructor() {
     this.group = new THREE.Group();
@@ -87,6 +91,14 @@ export class Cat {
     });
     const nose = new THREE.MeshStandardMaterial({ color: 0x8a4a4a, roughness: 0.5 });
     const earIn = new THREE.MeshStandardMaterial({ color: 0x5a3a3a, roughness: 0.8 });
+    const collar = new THREE.MeshStandardMaterial({ color: 0x8c1f2a, roughness: 0.6 });
+    const brass = new THREE.MeshStandardMaterial({
+      color: 0xc9a040,
+      roughness: 0.25,
+      metalness: 0.9,
+      emissive: 0x4a3410,
+      emissiveIntensity: 0.6,
+    });
     this.mats = { fur, white, eye };
 
     // --- body -------------------------------------------------------------
@@ -125,6 +137,17 @@ export class Cat {
     noseM.position.set(0.32, 0.04, 0);
     this.head.add(noseM);
 
+    // collar with a small brass bell
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.028, 8, 20), collar);
+    ring.position.set(-0.03, -0.06, 0);
+    ring.rotation.y = Math.PI / 2;
+    ring.scale.set(1, 1.15, 1);
+    this.head.add(ring);
+    const bell = sphere(0.035, brass, 10, 8);
+    bell.position.set(0.02, -0.21, 0);
+    this.head.add(bell);
+    this.bell = bell;
+
     this.ears = [];
     for (const s of [-1, 1]) {
       const ear = new THREE.Group();
@@ -151,7 +174,6 @@ export class Cat {
       this.eyes.push(e);
     }
 
-    // whiskers
     const wPts = [];
     for (const s of [-1, 1]) {
       for (let i = -1; i <= 1; i++) {
@@ -199,14 +221,7 @@ export class Cat {
     this.jumpT = 10;
     this.blinkT = 2.5;
     this.blink = 0;
-    this.state = {
-      bodyPitch: 0,
-      bodyY: 0,
-      headPitch: 0,
-      headYaw: 0,
-      sx: 1,
-      sy: 1,
-    };
+    this.state = { bodyPitch: 0, bodyY: 0, headPitch: 0, headYaw: 0, sx: 1, sy: 1 };
   }
 
   onJump() {
@@ -227,7 +242,7 @@ export class Cat {
 
   /**
    * @param {number} dt seconds
-   * @param {object} s  { mode: 'idle'|'run'|'air'|'sit'|'dead', vy, speed, t }
+   * @param {object} s  { mode: 'idle'|'run'|'air'|'slide'|'dive'|'sit'|'dead', vy, speed, t }
    */
   update(dt, s) {
     const k = 1 - Math.exp(-dt * 20);
@@ -235,9 +250,6 @@ export class Cat {
     this.landT += dt;
     this.jumpT += dt;
     const t = s.t;
-
-    // base tail curve: lifts up and back, tip curls slightly
-    const tailBase = [-0.75, -0.3, -0.12, 0.0, 0.08, 0.12, 0.14, 0.12];
 
     let legs; // [[a,b] x4] FL FR BL BR
     let bodyPitch = 0;
@@ -269,7 +281,7 @@ export class Cat {
       headPitch = -bodyPitch * 0.7 + 0.1;
       headYaw = 0.02 * Math.sin(TWO_PI * p);
       for (let i = 0; i < TAIL_SEGMENTS; i++) {
-        tailA[i] = tailBase[i] + 0.2 * Math.sin(TWO_PI * p - i * 0.55) * (0.35 + i * 0.09);
+        tailA[i] = TAIL_BASE[i] + 0.2 * Math.sin(TWO_PI * p - i * 0.55) * (0.35 + i * 0.09);
       }
     } else if (s.mode === 'air') {
       const rise = smoothstep(-5, 5, s.vy);
@@ -292,9 +304,39 @@ export class Cat {
       sx = lerp(1.0, 1.1, rise);
       sy = lerp(1.0, 0.92, rise);
       for (let i = 0; i < TAIL_SEGMENTS; i++) {
-        tailA[i] = lerp(tailBase[i] * 0.35 + 0.1, tailBase[i] * 0.6 - 0.1, rise) + 0.08 * Math.sin(t * 9 - i * 0.6);
+        tailA[i] = lerp(TAIL_BASE[i] * 0.35 + 0.1, TAIL_BASE[i] * 0.6 - 0.1, rise) + 0.08 * Math.sin(t * 9 - i * 0.6);
       }
       legK = 1 - Math.exp(-dt * 14);
+    } else if (s.mode === 'dive') {
+      // nose down, legs swept back, tail straight up behind
+      legs = [
+        [-0.75, -0.55],
+        [-0.7, -0.5],
+        [-0.95, -0.25],
+        [-0.9, -0.3],
+      ];
+      bodyPitch = -0.5;
+      headPitch = 0.3;
+      sx = 1.12;
+      sy = 0.9;
+      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = -0.35 + 0.1 * Math.sin(t * 11 - i * 0.7);
+      legK = 1 - Math.exp(-dt * 16);
+    } else if (s.mode === 'slide') {
+      // belly to the ground, front paws reaching, hind legs trailing
+      this.phase = (this.phase + (dt * s.speed) / 2.1) % 1;
+      legs = [
+        [1.25, -0.25],
+        [1.15, -0.3],
+        [-1.05, 0.15],
+        [-1.0, 0.1],
+      ];
+      bodyPitch = -0.04;
+      bodyY = -0.25;
+      headPitch = 0.12;
+      sx = 1.12;
+      sy = 0.78;
+      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = TAIL_BASE[i] * 0.25 + 0.12 * Math.sin(t * 7 - i * 0.6);
+      legK = 1 - Math.exp(-dt * 16);
     } else if (s.mode === 'sit') {
       legs = [
         [-0.18, 0.05],
@@ -307,8 +349,7 @@ export class Cat {
       headPitch = -0.3 + 0.03 * Math.sin(t * 1.1);
       headYaw = 0.25 * Math.sin(t * 0.5);
       sy = 1 + 0.015 * Math.sin(t * 2.4);
-      const sitTail = [0.95, 0.55, 0.25, 0.05, -0.1, -0.2, -0.2, -0.1];
-      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = sitTail[i] + 0.12 * Math.sin(t * 1.7 - i * 0.7);
+      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = TAIL_SIT[i] + 0.12 * Math.sin(t * 1.7 - i * 0.7);
       legK = kSlow;
     } else if (s.mode === 'dead') {
       legs = [
@@ -317,8 +358,7 @@ export class Cat {
         [0.5, -0.3],
         [-0.6, -0.7],
       ];
-      bodyPitch = 0;
-      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = tailBase[i] * 0.3;
+      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = TAIL_BASE[i] * 0.3;
       legK = kSlow;
     } else {
       // idle: standing, breathing, looking around
@@ -333,7 +373,7 @@ export class Cat {
       headYaw = 0.38 * Math.sin(t * 0.55) + 0.1 * Math.sin(t * 1.7);
       headPitch = 0.06 + 0.05 * Math.sin(t * 1.3);
       earFlap = Math.sin(t * 6.3) > 0.985 ? 0.4 : 0;
-      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = tailBase[i] + 0.24 * Math.sin(t * 1.5 - i * 0.7) * (0.3 + i * 0.1);
+      for (let i = 0; i < TAIL_SEGMENTS; i++) tailA[i] = TAIL_BASE[i] + 0.24 * Math.sin(t * 1.5 - i * 0.7) * (0.3 + i * 0.1);
       legK = kSlow;
     }
 
@@ -374,6 +414,8 @@ export class Cat {
       seg.g.rotation.y = 0.15 * Math.sin(t * 2.3 + i * 0.5) * (i / TAIL_SEGMENTS);
     }
     for (const e of this.ears) e.rotation.y = lerp(e.rotation.y, earFlap * Math.sign(e.position.z), kSlow);
+    // the bell swings a little with the run
+    this.bell.position.x = 0.02 + 0.02 * Math.sin(t * 12) * (s.mode === 'run' ? 1 : 0.2);
 
     // blink
     this.blinkT -= dt;
