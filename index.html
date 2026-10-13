@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#06070f" />
+    <title>Night Cat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="ui">
+      <div id="hud" class="layer">
+        <div class="hud-left">
+          <span class="hud-label">sparks</span>
+          <span id="hud-sparks" class="hud-value">0</span>
+        </div>
+        <div class="hud-right">
+          <div class="progress"><div id="hud-progress" class="progress-fill"></div></div>
+        </div>
+      </div>
+
+      <div id="title" class="layer screen">
+        <div class="screen-inner">
+          <p class="eyebrow">a night on the walls</p>
+          <h1 class="logo">NIGHT CAT</h1>
+          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to begin</p>
+          <p class="hint">hold to jump higher &nbsp;·&nbsp; the street never stops</p>
+        </div>
+      </div>
+
+      <div id="gameover" class="layer screen">
+        <div class="screen-inner">
+          <p class="eyebrow">the night goes on…</p>
+          <h2 class="headline" id="gameover-title">lost the walk</h2>
+          <p class="stats"><span id="gameover-stats"></span></p>
+          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to try again</p>
+        </div>
+      </div>
+
+      <div id="clear" class="layer screen">
+        <div class="screen-inner">
+          <p class="eyebrow">home at last</p>
+          <h2 class="headline">stage clear</h2>
+          <p class="stats"><span id="clear-stats"></span></p>
+          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to walk again</p>
+        </div>
+      </div>
+
+      <div id="flash" class="layer"></div>
+      <div id="fade" class="layer"></div>
+      <div id="corner" class="layer">
+        <span id="mute-hint"><kbd>m</kbd> sound</span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
