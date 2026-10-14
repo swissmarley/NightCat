@@ -2,7 +2,7 @@
 //
 // plat(len, top, obstacles) / gap(len). Obstacle x is relative to the platform
 // start. Kinds are theme-specific; 'cp' is a checkpoint marker. Hanging kinds
-// (laundry, hangsign, rope, branch) must be slid under.
+// (laundry, hangsign, rope, branch) are slid under or jumped; stage I has none.
 //
 // Authoring rules of thumb (full jump carries ≈5.5u at 7u/s, ≈7.2u at 9.4u/s):
 //   - a ground obstacle sits ≥4.5u after a gap landing and ≥5u after a step-up
@@ -36,7 +36,7 @@ export const STAGES = [
     ],
     layout: () =>
       make((plat, gap) => {
-        plat(20, 0, [{ x: 14, kind: 'laundry' }]); // intro — learn to slide (or jump high)
+        plat(20, 0); // intro — nothing but the walk and the sparks
         gap(2.4);
         plat(11, 0, [{ x: 5.5, kind: 'crate' }]);
         gap(2.8);
@@ -64,7 +64,7 @@ export const STAGES = [
           { x: 4.8, kind: 'planter' },
           { x: 8.6, kind: 'cp' },
         ]);
-        plat(12, 0.2, [{ x: 5.5, kind: 'laundry' }]);
+        plat(12, 0.2);
         gap(4.0);
         plat(11, 0.2, [{ x: 4.8, kind: 'sign' }]);
         gap(3.0);
@@ -83,7 +83,7 @@ export const STAGES = [
           { x: 7.5, kind: 'sign' },
         ]);
         gap(4.2);
-        plat(13, 0, [{ x: 5, kind: 'hangsign' }]);
+        plat(13, 0, [{ x: 5, kind: 'crate' }]);
         plat(13, 0.9, [{ x: 7.0, kind: 'crate' }]);
         gap(3.0);
         plat(5, 0.9);
@@ -95,10 +95,7 @@ export const STAGES = [
           { x: 8.7, kind: 'crate' },
         ]);
         gap(3.6);
-        plat(26, 0, [
-          { x: 6, kind: 'laundry' },
-          { x: 13, kind: 'hangsign' },
-        ]); // home stretch; the gate sits 14u in
+        plat(26, 0, [{ x: 6, kind: 'bin' }]); // home stretch; the gate sits 14u in
       }),
   },
   {

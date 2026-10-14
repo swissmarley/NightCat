@@ -36,7 +36,7 @@ branches) only block what you can see: slide under them, or clear them with a hi
 ### The stages
 
 - **I · a night on the walls** — brick walls and rooftops along a street in the rain. Crates,
-  bins, planters and signboards to jump; laundry lines and shop signs to slide under.
+  bins, planters and signboards to jump. Jump only — nothing to slide under yet.
 - **II · the shrine path** — moss walls and footbridges over a still lake on the way to a
   mountain shrine. Rocks, fences, fox statues and offering boxes to jump; shimenawa ropes
   under torii gates and low maple branches to slide under. Faster.
