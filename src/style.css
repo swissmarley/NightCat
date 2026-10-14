@@ -193,7 +193,7 @@ body.touch .no-touch {
   transition:
     opacity 0.9s ease,
     visibility 0s linear 0.9s;
-  background: radial-gradient(ellipse at center, rgba(6, 7, 15, 0.1) 0%, rgba(6, 7, 15, 0.6) 100%);
+  background: radial-gradient(ellipse at center, rgba(6, 7, 15, 0.05) 0%, rgba(6, 7, 15, 0.4) 100%);
 }
 .screen.visible {
   opacity: 1;

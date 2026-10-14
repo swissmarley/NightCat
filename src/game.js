@@ -288,7 +288,6 @@ export class Game {
     if (kind === 'hit') {
       p.vy = 5.5;
       p.grounded = false;
-      this.ui.flash();
       this.sfx.hit();
       this.shake = 0.45;
       this.slowmo = 0.5;
