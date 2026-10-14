@@ -274,15 +274,18 @@ export class World {
     this.composer.addPass(new OutputPass());
   }
 
-  resize(w, h) {
-    this.composer.setPixelRatio(this.renderer.getPixelRatio());
-    this.composer.setSize(w, h);
-    const bs = this.quality.bloomScale;
-    this.bloom.setSize(w * bs, h * bs);
+  /** Rebuild the post-processing chain from scratch at the new size. */
+  resize() {
+    if (this.composer) this.composer.dispose();
+    this.buildPost();
   }
 
-  render() {
-    this.composer.render();
+  /** safe: draw straight to the screen with no post-processing. */
+  render(safe = false) {
+    if (safe) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, this.camera);
+    } else this.composer.render();
   }
 
   // --- per-frame -----------------------------------------------------------------------------

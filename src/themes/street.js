@@ -6,32 +6,9 @@ import { brickTexture, stoneTexture, asphaltMaps, woodTexture, windowTexture, bo
 
 const STREET_Y = -3.2;
 
-// Fake volumetric light cone under each lamp head.
-function makeConeMaterial(color) {
-  return new THREE.ShaderMaterial({
-    uniforms: { color: { value: new THREE.Color(color) }, strength: { value: 0.2 } },
-    vertexShader: /* glsl */ `
-      varying float vV; varying float vFacing;
-      void main() {
-        vV = uv.y;
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vec3 n = normalize(normalMatrix * normal);
-        vFacing = abs(dot(n, normalize(-mv.xyz)));
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform vec3 color; uniform float strength;
-      varying float vV; varying float vFacing;
-      void main() {
-        float a = pow(vV, 1.7) * pow(vFacing, 1.4) * strength;
-        gl_FragColor = vec4(color, a);
-      }`,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-}
+// Note: no custom shaders in this theme. A previous "light cone" shader under
+// the lamps produced NaN pixels on some phone GPUs (pow() at exactly zero),
+// which the bloom blur then spread into a flickering black screen.
 
 export const streetTheme = {
   key: 'street',
@@ -319,7 +296,7 @@ export const streetTheme = {
     this.buildBuildings(world);
     this.buildLamps(world, S);
     this.buildLanterns(world, S);
-    this.buildRain(world, S, Math.round(650 * quality.particles));
+    this.buildRain(world, S, Math.round(450 * quality.particles));
   },
 
   buildBuildings(world) {
@@ -389,8 +366,6 @@ export const streetTheme = {
     const capGeo = new THREE.ConeGeometry(0.26, 0.2, 6);
     const glassGeo = new THREE.BoxGeometry(0.24, 0.3, 0.24);
     const frameGeo = new THREE.BoxGeometry(0.3, 0.05, 0.3);
-    const coneGeo = new THREE.ConeGeometry(1.7, 3.6, 24, 1, true);
-    const coneMat = makeConeMaterial(0xffb060);
     const glowMat = new THREE.SpriteMaterial({
       map: tex.glow,
       color: 0xffb060,
@@ -437,11 +412,8 @@ export const streetTheme = {
       g.add(bottom);
       const glow = new THREE.Sprite(glowMat.clone());
       glow.position.set(0, headY, headZ);
-      glow.scale.set(2.6, 2.6, 1);
+      glow.scale.set(3.0, 3.0, 1);
       g.add(glow);
-      const cone = new THREE.Mesh(coneGeo, coneMat);
-      cone.position.set(0, headY - 1.95, headZ);
-      g.add(cone);
       scene.add(g);
       const fixture = { x, y: STREET_Y + headY, z: z + headZ, color: 0xffb978, intensity: 42, distance: 17, flicker: true };
       world.fixtures.push(fixture);
