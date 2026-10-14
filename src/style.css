@@ -408,15 +408,15 @@ body.touch #touchzones {
 
 /* ---------- Transitions ---------- */
 #flash {
-  background: #2b1512;
+  background: #8a2e24; /* a warm hit flash, not a blackout */
   opacity: 0;
 }
 #flash.hit {
-  animation: flash 0.5s ease-out;
+  animation: flash 0.45s ease-out;
 }
 @keyframes flash {
   0% {
-    opacity: 0.55;
+    opacity: 0.35;
   }
   100% {
     opacity: 0;
