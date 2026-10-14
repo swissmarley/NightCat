@@ -23,14 +23,15 @@ from any sub-path, e.g. GitHub Pages). `npm run preview` serves that build.
 | Input                                            | Action                                        |
 | ------------------------------------------------ | --------------------------------------------- |
 | `Space` / `↑` / `W` / click / tap (right side)   | jump — **hold** for a higher, longer jump     |
-| `↓` / `S` / `Shift` / tap (left third)           | slide under hanging things; in the air: dive  |
+| `↓` / `S` / `Shift` / right-click / hold (left third) | slide under hanging things; in the air: dive |
 | `P` / `Esc`                                      | pause                                         |
 | `R`                                              | restart the stage                             |
 | `M` / the corner button                          | mute / unmute                                 |
 
 Jump buffering (press slightly before landing) and coyote time (press slightly after
 running off an edge) are built in, and a landing that just barely misses a ledge still
-counts. A cat always finds the ledge.
+counts. A cat always finds the ledge. Hanging things (washing lines, signs, ropes, low
+branches) only block what you can see: slide under them, or clear them with a high jump.
 
 ### The stages
 

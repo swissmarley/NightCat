@@ -83,8 +83,15 @@ export const streetTheme = {
       chalk: new THREE.MeshStandardMaterial({ color: 0x3b3a36, roughness: 0.9 }),
       iron: new THREE.MeshStandardMaterial({ color: 0x1a1b22, roughness: 0.55, metalness: 0.5 }),
       rope: new THREE.MeshStandardMaterial({ color: 0x6a5a48, roughness: 0.9 }),
-      cloth: [0x7a8fa8, 0xb89a8a, 0xd8d0c0, 0x8aa07a, 0xa8788a].map(
-        (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, side: THREE.DoubleSide })
+      cloth: [0xc9d8ec, 0xe8c9b8, 0xf0ebdd, 0xc8dcc0, 0xe6c4d0].map(
+        (c) =>
+          new THREE.MeshStandardMaterial({
+            color: c,
+            roughness: 0.95,
+            side: THREE.DoubleSide,
+            emissive: c,
+            emissiveIntensity: 0.12, // keeps the washing readable against the dark street
+          })
       ),
       signFace: new THREE.MeshStandardMaterial({
         color: 0x2a1c10,
@@ -182,26 +189,29 @@ export const streetTheme = {
       const pts = [];
       for (let i = 0; i <= 8; i++) {
         const u = i / 8;
-        pts.push(new THREE.Vector3(-1.05 + u * 2.1, 1.55 - 0.12 * Math.sin(u * Math.PI), -0.3));
+        pts.push(new THREE.Vector3(-1.05 + u * 2.1, 1.5 - 0.08 * Math.sin(u * Math.PI), -0.3));
       }
       g.add(
         new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(pts),
-          new THREE.LineBasicMaterial({ color: 0x3a3630, transparent: true, opacity: 0.8 })
+          new THREE.LineBasicMaterial({ color: 0x6a665e, transparent: true, opacity: 0.9 })
         )
       );
+      // every piece hangs down to the same height, just above a sliding cat
       for (let i = 0; i < 4; i++) {
-        const w = 0.3 + rng() * 0.14;
-        const h = 0.68 + rng() * 0.3;
-        const cloth = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m.cloth[Math.floor(rng() * m.cloth.length)]);
+        const w = 0.34 + rng() * 0.12;
         const cx = -0.72 + i * 0.48;
-        cloth.position.set(cx, 1.46 - 0.1 * Math.sin(((cx + 1.05) / 2.1) * Math.PI) - h / 2, -0.3);
-        cloth.rotation.y = (rng() - 0.5) * 0.3;
+        const lineY = 1.5 - 0.08 * Math.sin(((cx + 1.05) / 2.1) * Math.PI);
+        const h = lineY - 0.44;
+        const cloth = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m.cloth[Math.floor(rng() * m.cloth.length)]);
+        cloth.position.set(cx, lineY - h / 2, -0.3);
+        cloth.rotation.y = (rng() - 0.5) * 0.25;
         cloth.castShadow = true;
         g.add(cloth);
       }
       group.add(g);
-      return { w: 2.0, clearance: 0.42 };
+      // collision stops below the line: brushing the hems at the top of a jump is fine
+      return { w: 2.0, clearance: 0.42, height: 1.15 };
     }
     // hangsign: a bracket from a pole holding a lit sign over the walk
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 2.0, 8), m.iron);
@@ -225,7 +235,7 @@ export const streetTheme = {
     frame.position.set(0, 0.72, -0.31);
     g.add(frame);
     group.add(g);
-    return { w: 0.9, clearance: 0.44 };
+    return { w: 0.9, clearance: 0.44, height: 1.02 };
   },
 
   buildGoal(level) {

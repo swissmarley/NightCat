@@ -56,8 +56,9 @@ export class Input {
 
     target.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      // touch: left third slides, the rest jumps; mouse: always jump
-      const slideZone = e.pointerType === 'touch' && e.clientX < window.innerWidth * 0.34;
+      // touch: left third slides, the rest jumps; mouse: left button jumps, right button slides
+      const slideZone =
+        (e.pointerType === 'touch' && e.clientX < window.innerWidth * 0.34) || (e.pointerType !== 'touch' && e.button === 2);
       if (slideZone) {
         this._pointerSlide.add(e.pointerId);
         this.slide();
@@ -65,8 +66,9 @@ export class Input {
         this.jump();
       }
     });
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
     const up = (e) => {
-      if (e && this._pointerSlide.has(e.pointerId)) {
+      if (e && this._pointerSlide.has(e.pointerId) && (e.pointerType === 'touch' || e.button === 2 || e.type === 'pointercancel')) {
         this._pointerSlide.delete(e.pointerId);
         this.slideHeld = this._pointerSlide.size > 0;
       } else {
