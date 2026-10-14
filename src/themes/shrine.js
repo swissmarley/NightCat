@@ -14,6 +14,7 @@ export const shrineTheme = {
   floorY: WATER_Y,
   ambience: 'night',
   hanging: new Set(['rope', 'branch']),
+  fallFx: { sound: 'splash', color: 0x8fc0d0 },
   colors: {
     bg: 0x060a0e,
     fog: 0x0a1518,

@@ -2,7 +2,7 @@
 // camera, stage loading and the render loop.
 import * as THREE from 'three';
 import { Cat } from './cat.js';
-import { buildLevel, resetCheckpoints, activateCheckpoint } from './level.js';
+import { buildLevel, resetCheckpoints, activateCheckpoint, resetBrittle, BRITTLE_DELAY } from './level.js';
 import { World } from './world.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
@@ -10,10 +10,11 @@ import { UI } from './ui.js';
 import { STAGES, stageById } from './stages.js';
 import { streetTheme } from './themes/street.js';
 import { shrineTheme } from './themes/shrine.js';
+import { snowTheme } from './themes/snow.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
@@ -130,6 +131,7 @@ export class Game {
     this.loadStage(initial);
     this.ui.buildCards(STAGES, this.save.records);
     this.setState(this.params.has('stage') ? 'ready' : 'title');
+    if (this.state === 'ready') this.ui.fadeIn(false);
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -239,6 +241,13 @@ export class Game {
         );
       }
     }
+    if (!this.hints.brittle) {
+      const b = level.brittle.find((pl) => pl.x0 > p.x && pl.x0 - p.x < 9);
+      if (b) {
+        this.hints.brittle = true;
+        this.ui.toast('old boards ahead — they give way a moment after you land: jump off them', 2200);
+      }
+    }
     if (!this.hints.gap) {
       const first = level.platforms[0];
       if (first.x1 - p.x < 5) {
@@ -279,6 +288,8 @@ export class Game {
     p.deathT = 0;
     p.rot = 0;
     p.autoHold = 0;
+    resetBrittle(this.level);
+    for (const o of this.level.hangers) o.passed = o.x < p.x;
     if (!fromCheckpoint) {
       p.sparks = 0;
       p.runTime = 0;
@@ -334,6 +345,9 @@ export class Game {
       this.world.puff(p.x, p.y, 8, 1.3);
     } else {
       this.sfx.fall();
+      // drift on down into the gap, but not through the wall of the roof ahead
+      const ahead = this.level.platforms.find((pl) => !pl.gone && pl.x0 > p.x - BODY);
+      p.fallLimit = ahead ? ahead.x0 - BODY : Infinity;
     }
     this.setState('dead');
   }
@@ -406,9 +420,21 @@ export class Game {
       p.y += p.vy * h;
     }
 
+    // old boards give way a moment after they are first stood on
+    for (const pl of level.brittle) {
+      if (pl.touchT === null || pl.gone) continue;
+      pl.touchT += h;
+      if (pl.touchT >= BRITTLE_DELAY) {
+        pl.gone = true;
+        this.sfx.crack();
+        this.world.puff(Math.min(Math.max(p.x, pl.x0 + 0.5), pl.x1 - 0.5), pl.top, 8, 1.1);
+      }
+    }
+
     // walls: running face-first into the leading edge of a platform whose top is
     // well above the feet (only the leading edge counts)
     for (const pl of level.platforms) {
+      if (pl.gone) continue;
       if (pl.top > p.y + STEP_TOL && pl.x0 < p.x + BODY && pl.x0 >= p.x - BODY) {
         p.x = pl.x0 - BODY - 0.02;
         p.groundY = Math.max(level.floorY, p.groundY);
@@ -421,6 +447,7 @@ export class Game {
     if (p.grounded) {
       let top = -Infinity;
       for (const pl of level.platforms) {
+        if (pl.gone) continue;
         if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL) top = Math.max(top, pl.top);
       }
       if (top === -Infinity) {
@@ -431,11 +458,13 @@ export class Game {
       } else {
         p.y = top;
         p.groundY = top;
+        this.touchBrittle(top);
       }
     } else if (p.vy <= 0) {
       // land when the feet cross a top this step; a near miss just below the ledge counts too
       let top = -Infinity;
       for (const pl of level.platforms) {
+        if (pl.gone) continue;
         if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && pl.top <= prevY + STEP_TOL && pl.top >= p.y) top = Math.max(top, pl.top);
       }
       if (top > -Infinity) {
@@ -452,6 +481,7 @@ export class Game {
         this.cat.onLand();
         this.sfx.land(clamp(impact / 14, 0.3, 1.2));
         this.world.puff(p.x, p.y, impact > 11 ? 8 : 5, clamp(impact / 12, 0.6, 1.4));
+        this.touchBrittle(top);
       }
     }
 
@@ -480,6 +510,10 @@ export class Game {
       if (cx1 > o.x - o.w / 2 && cx0 < o.x + o.w / 2 && cy1 > o.y0 && cy0 < o.y1) {
         this.die('hit');
         return;
+      }
+      if (!o.passed && p.x >= o.x) {
+        o.passed = true;
+        this.theme.onPass?.(o, this.sfx);
       }
     }
 
@@ -517,6 +551,41 @@ export class Game {
     if (p.x >= level.goalX) this.clearStage();
   }
 
+  /** Standing on boards starts their countdown (once). */
+  touchBrittle(top) {
+    const p = this.p;
+    for (const pl of this.level.brittle) {
+      if (pl.touchT !== null || pl.gone || Math.abs(pl.top - top) > 0.01) continue;
+      if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT) {
+        pl.touchT = 0;
+        this.sfx.creak();
+      }
+    }
+  }
+
+  /** Seconds in the air for a jump held `hold` seconds that comes down `dy` above where it left. */
+  airTime(hold, dy) {
+    let t0 = 0;
+    let y0 = 0;
+    let v0 = JUMP_V;
+    if (JUMP_V - GRAVITY * hold > JUMP_CUT_V) {
+      // released while still rising fast: the jump is cut short
+      t0 = hold;
+      y0 = JUMP_V * hold - 0.5 * GRAVITY * hold * hold;
+      v0 = JUMP_CUT_V;
+    }
+    const disc = v0 * v0 + 2 * GRAVITY * (y0 - dy);
+    return disc < 0 ? 0 : t0 + (v0 + Math.sqrt(disc)) / GRAVITY;
+  }
+
+  /** The shortest hold that carries the cat `dist` forward, landing `dy` above the takeoff. */
+  holdFor(dist, dy, speed) {
+    for (let hold = 0.04; hold < 0.3; hold += 0.01) {
+      if (this.airTime(hold, dy) * speed >= dist) return hold;
+    }
+    return 0.45;
+  }
+
   runAutopilot(h) {
     const p = this.p;
     const level = this.level;
@@ -538,17 +607,22 @@ export class Game {
     if (wantSlide) return;
     let hazard = Infinity;
     let hold = 0.45;
-    const cur = level.platforms.find((pl) => pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL);
+    const speed = this.speedAt(p.x);
+    const cur = level.platforms.find(
+      (pl) => !pl.gone && pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL
+    );
     if (cur) {
       const next = level.platforms.find((pl) => pl.x0 >= cur.x1 - 0.01);
       const gapAhead = !next || next.x0 > cur.x1 + 0.01 || next.top > cur.top + STEP_TOL;
       if (gapAhead && next && next.x0 <= cur.x1 + 0.01) hazard = Math.min(hazard, cur.x1 - 1.7); // wall
       else if (gapAhead && next) {
-        hazard = Math.min(hazard, cur.x1 - 0.3); // gap
-        if (next.top <= cur.top) {
-          const need = next.x0 - cur.x1 + 1.2;
-          hold = clamp(((need - 1.9) / 3.6) * 0.45, 0.06, 0.45);
-        }
+        hazard = Math.min(hazard, cur.x1 - 0.3); // gap: land about a body length in
+        if (next.top <= cur.top) hold = this.holdFor(next.x0 - cur.x1 + 1.3, next.top - cur.top, speed);
+      }
+      if (cur.brittle && cur.touchT !== null && cur.touchT >= BRITTLE_DELAY - 0.15 && next) {
+        // the boards are about to go: leave now, for wherever is next
+        hazard = p.x;
+        hold = next.top > cur.top ? 0.45 : this.holdFor(next.x0 - p.x + 1.0, next.top - cur.top, speed);
       }
     }
     for (const o of level.obstacles) {
@@ -579,6 +653,7 @@ export class Game {
     p.deathT += h;
     p.vx = damp(p.vx, 0, 3, h);
     p.x += p.vx * h;
+    if (p.deathKind === 'fall') p.x = Math.min(p.x, p.fallLimit);
     if (!p.grounded) {
       p.vy -= GRAVITY * h;
       p.y += p.vy * h;
@@ -589,9 +664,10 @@ export class Game {
         p.vy = 0;
         p.grounded = true;
         this.cat.onLand();
-        if (p.deathKind === 'fall' && this.theme.key === 'shrine') {
-          this.sfx.splash();
-          this.world.puff(p.x, p.y, 10, 1.6, 0x8fc0d0);
+        const fx = this.theme.fallFx;
+        if (p.deathKind === 'fall' && fx) {
+          this.sfx[fx.sound]();
+          this.world.puff(p.x, p.y, 10, 1.6, fx.color);
         } else {
           this.sfx.land();
           this.world.puff(p.x, p.y, 6, 1);

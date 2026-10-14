@@ -1,4 +1,4 @@
-// Tiny WebAudio synth: ambience beds (rain / mountain night) and one-shot sounds. No samples.
+// Tiny WebAudio synth: ambience beds (rain / mountain night / snow) and one-shot sounds. No samples.
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -38,7 +38,7 @@ export class Sfx {
     return buf;
   }
 
-  /** Switch the ambience bed: 'rain' (stage I) or 'night' (stage II). */
+  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II) or 'snow' (stage III). */
   setAmbience(kind) {
     this.wantAmbience = kind;
     if (!this.ctx || kind === this.ambKind) return;
@@ -56,9 +56,13 @@ export class Sfx {
     padGain.gain.value = kind === 'rain' ? 0.045 : 0.035;
     const padLp = ctx.createBiquadFilter();
     padLp.type = 'lowpass';
-    padLp.frequency.value = kind === 'rain' ? 260 : 320;
+    padLp.frequency.value = kind === 'rain' ? 260 : kind === 'snow' ? 380 : 320;
     padLp.connect(padGain).connect(out);
-    const chord = kind === 'rain' ? [55, 82.6, 110.4] : [49, 73.6, 98.2, 147.1];
+    const chord = {
+      rain: [55, 82.6, 110.4],
+      night: [49, 73.6, 98.2, 147.1],
+      snow: [43.65, 65.4, 87.3, 130.8, 164.8],
+    }[kind];
     for (const f of chord) {
       const o = ctx.createOscillator();
       o.type = f < 60 ? 'triangle' : 'sine';
@@ -91,6 +95,47 @@ export class Sfx {
       const g = ctx.createGain();
       g.gain.value = 0.05;
       noise.connect(bp).connect(lp).connect(g).connect(out);
+    } else if (kind === 'snow') {
+      // cold wind: a low rush with a slow swell, and a thin whistle that wanders in pitch
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 360;
+      const g = ctx.createGain();
+      g.gain.value = 0.04;
+      const swell = ctx.createOscillator();
+      swell.frequency.value = 0.07;
+      const swellGain = ctx.createGain();
+      swellGain.gain.value = 0.025;
+      swell.connect(swellGain).connect(g.gain);
+      swell.start();
+      noise.connect(lp).connect(g).connect(out);
+      const whistle = ctx.createBiquadFilter();
+      whistle.type = 'bandpass';
+      whistle.frequency.value = 820;
+      whistle.Q.value = 14;
+      const wander = ctx.createOscillator();
+      wander.frequency.value = 0.045;
+      const wanderDepth = ctx.createGain();
+      wanderDepth.gain.value = 260;
+      wander.connect(wanderDepth).connect(whistle.frequency);
+      wander.start();
+      const wg = ctx.createGain();
+      wg.gain.value = 0.02;
+      const gust = ctx.createOscillator();
+      gust.frequency.value = 0.12;
+      const gustDepth = ctx.createGain();
+      gustDepth.gain.value = 0.018;
+      gust.connect(gustDepth).connect(wg.gain);
+      gust.start();
+      noise.connect(whistle).connect(wg).connect(out);
+      nodes.push(swell, wander, gust);
+      // now and then a church bell somewhere down in the town
+      const toll = () => {
+        if (this.ambKind !== 'snow') return;
+        this._bell(196, { vol: 0.03, dur: 4.5, dest: out });
+        this.ambTimer = setTimeout(toll, 9000 + Math.random() * 9000);
+      };
+      this.ambTimer = setTimeout(toll, 2500);
     } else {
       // wind through trees: low noise with a slow swell
       const lp = ctx.createBiquadFilter();
@@ -184,6 +229,32 @@ export class Sfx {
     o.stop(t + dur + 0.02);
   }
 
+  /** A struck bell: inharmonic partials with long, staggered decays. */
+  _bell(freq, { vol = 0.1, dur = 2.5, dest = null, delay = 0 } = {}) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + delay;
+    for (const [ratio, amp, decay] of [
+      [0.5, 0.5, 1],
+      [1, 1, 0.9],
+      [1.19, 0.45, 0.6],
+      [1.5, 0.35, 0.5],
+      [2.0, 0.4, 0.4],
+      [2.74, 0.2, 0.25],
+    ]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freq * ratio;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol * amp, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + dur * decay);
+      o.connect(g).connect(dest || this.master);
+      o.start(t);
+      o.stop(t + dur * decay + 0.05);
+    }
+  }
+
   _noise(dur, { freq = 400, q = 1, vol = 0.3, type = 'bandpass' } = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx;
@@ -235,6 +306,25 @@ export class Sfx {
   }
   splash() {
     this._noise(0.5, { freq: 900, q: 0.3, vol: 0.25, type: 'lowpass' });
+  }
+  /** Falling into deep snow. */
+  poof() {
+    this._noise(0.45, { freq: 380, q: 0.4, vol: 0.3, type: 'lowpass' });
+  }
+  /** Old boards taking the cat's weight. */
+  creak() {
+    this._tone(150, { type: 'triangle', dur: 0.32, vol: 0.1, slide: 60, attack: 0.03 });
+    this._noise(0.18, { freq: 620, q: 4, vol: 0.06 });
+  }
+  /** ...and giving way. */
+  crack() {
+    this._noise(0.18, { freq: 2400, q: 0.9, vol: 0.2 });
+    this._noise(0.45, { freq: 170, q: 0.6, vol: 0.28 });
+    this._tone(95, { type: 'triangle', dur: 0.35, vol: 0.14, slide: -40 });
+  }
+  /** A bell brushed in passing. */
+  chime() {
+    this._bell(523, { vol: 0.07, dur: 2.2 });
   }
   clear() {
     const notes = [523, 659, 784, 1046, 1318];
