@@ -357,3 +357,237 @@ export function boxWorldUV(w, h, d, tile = 2) {
   uv.needsUpdate = true;
   return geo;
 }
+
+/** Packed snow: near-white with soft blue-grey drifts and a few glints. 1 tile ≈ 2u. */
+export function snowTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#e9eef6';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 60; i++) {
+    g.fillStyle = `rgba(${170 + rng() * 30}, ${185 + rng() * 25}, ${215 + rng() * 25}, ${0.08 + rng() * 0.14})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 10 + rng() * 40, 4 + rng() * 14, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  for (let i = 0; i < 140; i++) {
+    g.fillStyle = `rgba(255, 255, 255, ${0.4 + rng() * 0.6})`;
+    g.fillRect(rng() * W, rng() * W, 1, 1);
+  }
+  addNoise(g, W, W, 10, rng);
+  return finish(c);
+}
+
+/** Rough lime plaster, near-white so a material colour can tint it. 1 tile ≈ 2u. */
+export function plasterTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#d6d0c6';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 70; i++) {
+    const l = 150 + rng() * 80;
+    g.fillStyle = `rgba(${l}, ${l - 6}, ${l - 14}, ${0.1 + rng() * 0.2})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 6 + rng() * 30, 4 + rng() * 18, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  // a few hairline cracks and a damp streak or two
+  g.strokeStyle = 'rgba(60, 55, 50, 0.35)';
+  g.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    let x = rng() * W;
+    let y = rng() * W;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 5; k++) {
+      x += (rng() - 0.5) * 18;
+      y += 4 + rng() * 10;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = 'rgba(90, 84, 76, 0.12)';
+    g.fillRect(rng() * W, 0, 4 + rng() * 10, W * (0.3 + rng() * 0.5));
+  }
+  addNoise(g, W, W, 24, rng);
+  return finish(c);
+}
+
+/**
+ * One window: a dark frame, four panes, a little snow on the sill line.
+ * lit: warm panes with a curtain drawn half across (also used as its emissive map).
+ */
+export function windowPaneTexture(lit) {
+  const W = 64;
+  const H = 88;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#22170f';
+  g.fillRect(0, 0, W, H);
+  const panes = [
+    [7, 7],
+    [34, 7],
+    [7, 46],
+    [34, 46],
+  ];
+  for (const [x, y] of panes) {
+    if (lit) {
+      const grad = g.createLinearGradient(0, y, 0, y + 35);
+      grad.addColorStop(0, '#ffe2b0');
+      grad.addColorStop(1, '#ff9c48');
+      g.fillStyle = grad;
+    } else {
+      const grad = g.createLinearGradient(x, y, x + 23, y + 35);
+      grad.addColorStop(0, '#26324a');
+      grad.addColorStop(0.45, '#101828');
+      grad.addColorStop(1, '#0a101c');
+      g.fillStyle = grad;
+    }
+    g.fillRect(x, y, 23, 35);
+  }
+  if (lit) {
+    // curtains: soft darker drapes at the sides
+    g.fillStyle = 'rgba(120, 40, 20, 0.55)';
+    g.beginPath();
+    g.moveTo(7, 7);
+    g.quadraticCurveTo(22, 40, 9, 81);
+    g.lineTo(7, 81);
+    g.fill();
+    g.beginPath();
+    g.moveTo(57, 7);
+    g.quadraticCurveTo(44, 40, 55, 81);
+    g.lineTo(57, 81);
+    g.fill();
+  }
+  return finish(c, { repeat: false });
+}
+
+/**
+ * A big sheet of façade cells for the houses behind the walk: each cell is a
+ * window on a neutral wall (tinted by vertex colour). Returns the colour map
+ * and an emissive map in which only the lit windows show.
+ */
+export function townWindowsTexture(rng, cols, rows, litProb = 0.3) {
+  const cw = 16;
+  const ch = 18;
+  const a = canvas(cols * cw, rows * ch);
+  const b = canvas(cols * cw, rows * ch);
+  const g = a.getContext('2d');
+  const e = b.getContext('2d');
+  g.fillStyle = '#8a8580';
+  g.fillRect(0, 0, a.width, a.height);
+  e.fillStyle = '#000';
+  e.fillRect(0, 0, b.width, b.height);
+  const palette = ['#ffb86b', '#ffcf8f', '#f3a35a', '#ffe2b0', '#ff9a5a'];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const px = x * cw + 5;
+      const py = y * ch + 4;
+      g.fillStyle = '#2a211b';
+      g.fillRect(px - 1, py - 1, cw - 8, ch - 7);
+      if (rng() < litProb) {
+        const col = palette[Math.floor(rng() * palette.length)];
+        const alpha = 0.5 + rng() * 0.5;
+        for (const ctx of [g, e]) {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = col;
+          ctx.fillRect(px, py, cw - 10, ch - 9);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(px + (cw - 10) / 2 - 0.5, py, 1, ch - 9);
+        }
+      } else {
+        g.fillStyle = `rgba(30, 40, 60, ${0.6 + rng() * 0.4})`;
+        g.fillRect(px, py, cw - 10, ch - 9);
+      }
+      // snow on the sill
+      g.fillStyle = '#e8eef6';
+      g.fillRect(px - 2, py + ch - 9, cw - 6, 2);
+    }
+  }
+  const map = finish(a, { repeat: false });
+  const emissiveMap = finish(b, { repeat: false });
+  return { map, emissiveMap };
+}
+
+/**
+ * Northern lights: vertical rays over a bright green lower hem fading up into
+ * violet. RGB is the colour, alpha the brightness (for additive blending).
+ * Tiles horizontally so it can drift.
+ */
+export function auroraTexture(rng) {
+  const W = 512;
+  const H = 128;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const img = g.createImageData(W, H);
+  const d = img.data;
+  // ray brightness per column: integer-frequency waves so the edges meet
+  const waves = [];
+  for (let i = 0; i < 9; i++) waves.push({ f: 1 + Math.floor(rng() * (6 + i * 5)), ph: rng() * Math.PI * 2, a: 0.4 + rng() });
+  const ray = new Float32Array(W);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let x = 0; x < W; x++) {
+    let v = 0;
+    for (const w of waves) v += w.a * Math.sin((x / W) * Math.PI * 2 * w.f + w.ph);
+    ray[x] = v;
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  const sm = (e0, e1, x) => {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  };
+  for (let x = 0; x < W; x++) {
+    const r = (ray[x] - lo) / (hi - lo);
+    const rays = 0.25 + 0.75 * r * r;
+    for (let y = 0; y < H; y++) {
+      const v = 1 - y / (H - 1); // 0 at the hem, 1 at the top
+      const body = sm(0, 0.1, v) * Math.pow(1 - sm(0.08, 1, v), 1.6);
+      const top = sm(0.3, 0.85, v);
+      const i = (y * W + x) * 4;
+      d[i] = 70 + 110 * top;
+      d[i + 1] = 255 - 150 * top;
+      d[i + 2] = 160 + 90 * top;
+      d[i + 3] = 255 * body * rays;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const tex = finish(c, { anisotropy: 1 });
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
+/** Rows of rounded clay roof tiles, dark with frost. 1 tile ≈ 1u. */
+export function roofTileTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#1c1414';
+  g.fillRect(0, 0, W, W);
+  const tw = 16;
+  const th = 16;
+  for (let row = 0; row < W / th; row++) {
+    const off = row % 2 ? tw / 2 : 0;
+    for (let col = -1; col <= W / tw; col++) {
+      const x = col * tw + off;
+      const y = row * th;
+      const l = 16 + rng() * 10;
+      g.fillStyle = `hsl(${8 + rng() * 14}, ${22 + rng() * 14}%, ${l}%)`;
+      g.beginPath();
+      g.moveTo(x + 1, y);
+      g.lineTo(x + tw - 1, y);
+      g.lineTo(x + tw - 1, y + th * 0.55);
+      g.quadraticCurveTo(x + tw / 2, y + th + 2, x + 1, y + th * 0.55);
+      g.fill();
+      g.fillStyle = `rgba(200, 215, 240, ${0.05 + rng() * 0.12})`; // frost
+      g.fillRect(x + 2, y + 1, tw - 4, 2);
+    }
+  }
+  addNoise(g, W, W, 14, rng);
+  return finish(c);
+}

@@ -7,6 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BRITTLE_DELAY } from './level.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smoothstep = (e0, e1, x) => {
@@ -154,9 +155,10 @@ export class World {
     const n = c.starCount;
     const pos = new Float32Array(n * 3);
     const col = new Float32Array(n * 3);
+    const [starLow, starSpan] = c.starRange || [12, 110];
     for (let i = 0; i < n; i++) {
       pos[i * 3] = (this.rng() - 0.5) * 380;
-      pos[i * 3 + 1] = 12 + Math.pow(this.rng(), 0.6) * 110;
+      pos[i * 3 + 1] = starLow + Math.pow(this.rng(), 0.6) * starSpan;
       pos[i * 3 + 2] = -93;
       const b = 0.35 + this.rng() * 0.65;
       const warm = this.rng() < 0.3;
@@ -347,6 +349,8 @@ export class World {
       cp.glow.material.opacity = 0.45 + 0.1 * Math.sin(t * 3);
     }
 
+    this.updateBrittle(dt);
+
     for (const d of this.dust) {
       if (d.life <= 0) continue;
       d.life -= dt;
@@ -361,6 +365,45 @@ export class World {
       const sc = 0.3 + u * d.grow;
       d.sp.scale.set(sc * 1.4, sc * 0.9, 1);
       d.sp.material.opacity = 0.35 * (1 - u) * (1 - u);
+    }
+  }
+
+  /** Boards sag and tremble once stood on (by physics time, so they freeze with it), then drop piece by piece. */
+  updateBrittle(dt) {
+    const floor = this.level.floorY;
+    for (const pl of this.level.brittle) {
+      if (pl.gone) {
+        if (!pl.dropping) {
+          pl.dropping = true;
+          pl.pieces.forEach((pc, i) => {
+            pc.delay = i * 0.035 + Math.random() * 0.04;
+            pc.vy = 0.5 + Math.random();
+            pc.vx = (Math.random() - 0.5) * 0.8;
+            pc.spin = (Math.random() - 0.5) * 5;
+            pc.tumble = (Math.random() - 0.5) * 2;
+          });
+        }
+        pl.fallT += dt;
+        for (const pc of pl.pieces) {
+          if (pc.resting || pl.fallT < pc.delay) continue;
+          const o = pc.o;
+          pc.vy -= 24 * dt;
+          o.position.x += pc.vx * dt;
+          o.position.y += pc.vy * dt;
+          o.rotation.z += pc.spin * dt;
+          o.rotation.x += pc.tumble * dt;
+          if (o.position.y < floor + 0.12) {
+            o.position.y = floor + 0.12;
+            pc.resting = true;
+          }
+        }
+      } else if (pl.touchT !== null) {
+        const u = Math.min(1, pl.touchT / BRITTLE_DELAY);
+        pl.pieces.forEach((pc, i) => {
+          pc.o.position.y = pc.pos.y - 0.05 * u + 0.014 * u * Math.sin(pl.touchT * 85 + i * 1.9);
+          pc.o.rotation.z = pc.rot.z + 0.025 * u * Math.sin(pl.touchT * 70 + i * 2.3);
+        });
+      }
     }
   }
 

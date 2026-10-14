@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 
 export const WALK_DEPTH = 2.2;
+/** Seconds a brittle platform (old boards) holds after it is first stood on. */
+export const BRITTLE_DELAY = 0.4;
 
 export function buildLevel(scene, stage, theme, tex, rng) {
   const level = {
@@ -11,6 +13,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
     platforms: [],
     obstacles: [],
     hangers: [],
+    brittle: [],
     sparks: [],
     checkpoints: [],
     fixtures: [],
@@ -38,8 +41,21 @@ export function buildLevel(scene, stage, theme, tex, rng) {
     const x0 = x;
     const x1 = x + it.len;
     const top = it.top;
-    theme.buildPlatform(level.group, x0, x1, top, rng, level.platforms.length);
-    level.platforms.push({ x0, x1, top });
+    if (it.brittle) {
+      // old boards: they give way a moment after they are first stood on
+      const pieces = theme.buildBrittle(level.group, x0, x1, top, rng).map((o) => ({
+        o,
+        pos: o.position.clone(),
+        rot: o.rotation.clone(),
+      }));
+      const pl = { x0, x1, top, brittle: true, touchT: null, gone: false, dropping: false, fallT: 0, pieces };
+      level.platforms.push(pl);
+      level.brittle.push(pl);
+      level.sparks.push({ x: x0 + (x1 - x0) * 0.55, y: top + 1.3 });
+    } else {
+      theme.buildPlatform(level.group, x0, x1, top, rng, level.platforms.length);
+      level.platforms.push({ x0, x1, top });
+    }
 
     for (const o of it.obs) {
       const ax = x0 + o.x;
@@ -84,8 +100,10 @@ function buildCheckpoint(level, x, top, theme, tex) {
   const g = new THREE.Group();
   g.position.set(x, top, -0.95);
   const dark = new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 0.7 });
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.75, 8), dark);
-  pole.position.y = 0.875;
+  // on a sloped walk (roofs) the pole reaches down to the surface behind the walk
+  const sink = theme.cpSink || 0;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.75 + sink, 8), dark);
+  pole.position.y = (1.75 - sink) / 2;
   pole.castShadow = true;
   g.add(pole);
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 6), dark);
@@ -132,6 +150,23 @@ export function resetCheckpoints(level) {
     cp.lantern.material.emissiveIntensity = 0.35;
     cp.glow.material.opacity = 0;
     cp.fixture.intensity = 0;
+  }
+}
+
+/** Put every brittle platform back as it was: unstood, unbroken, pieces in place. */
+export function resetBrittle(level) {
+  for (const pl of level.brittle) {
+    pl.touchT = null;
+    pl.gone = false;
+    pl.dropping = false;
+    pl.fallT = 0;
+    for (const pc of pl.pieces) {
+      pc.o.position.copy(pc.pos);
+      pc.o.rotation.copy(pc.rot);
+      pc.o.visible = true;
+      pc.vy = 0;
+      pc.resting = false;
+    }
   }
 }
 
