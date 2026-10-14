@@ -42,6 +42,7 @@ export class UI {
       btnSound: $('btn-sound'),
       btnFull: $('btn-full'),
       btnGfx: $('btn-gfx'),
+      debug: $('debug'),
     };
     this.screens = ['title', 'select', 'gameover', 'clear', 'pause'];
     this.onCard = null;
@@ -199,5 +200,11 @@ export class UI {
   }
   setGfx(safe) {
     this.el.btnGfx.textContent = safe ? 'graphics: simple' : 'graphics: rich';
+  }
+  showDebug(on) {
+    this.el.debug.style.display = on ? 'block' : 'none';
+  }
+  setDebug(text) {
+    this.el.debug.textContent = text;
   }
 }

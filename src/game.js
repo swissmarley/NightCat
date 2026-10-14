@@ -52,7 +52,6 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    renderer.debug.checkShaderErrors = false;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
     this.safe = !!this.save.safe || this.params.has('safe');
@@ -80,6 +79,7 @@ export class Game {
     this.ui.setGfx(this.safe);
     this.ui.el.btnGfx.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.currentTarget.blur();
       this.setSafeMode(!this.safe, this.safe ? 'rich graphics' : 'simple graphics');
     });
     this.input.onFirstInteraction = () => this.sfx.ensure();
@@ -90,14 +90,19 @@ export class Game {
       this.input.clearEdges();
       this.enterStage(STAGES[i].id);
     };
+    // corner buttons must not keep keyboard focus, or Space (jump) re-presses them
     this.ui.el.btnSound.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.currentTarget.blur();
       this.toggleMute();
     });
     this.ui.el.btnFull.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.currentTarget.blur();
       this.toggleFullscreen();
     });
+    this.debug = this.params.has('debug');
+    this.ui.showDebug(this.debug);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'run') this.setState('paused');
     });
@@ -139,7 +144,8 @@ export class Game {
   detectQuality() {
     const touch = this.input.touch;
     const small = Math.min(screen.width, screen.height) <= 600; // phones; tablets get the medium tier
-    const dpr = window.devicePixelRatio || 1;
+    const forced = Number(this.params.get('pr'));
+    const dpr = forced > 0 ? forced : window.devicePixelRatio || 1;
     if (touch && small) {
       return { tier: 'low', pixelRatio: Math.min(dpr, 1.0), maxPixelRatio: Math.min(dpr, 1.25), msaa: 2, bloomScale: 0.5, waterRes: 256, particles: 0.6, lights: 6, shadow: 1024 };
     }
@@ -164,7 +170,7 @@ export class Game {
     this.camera.aspect = w / h;
     this.updateFov();
     this.renderer.setSize(w, h);
-    this.world?.resize(w, h);
+    this.world?.resize();
   }
 
   /** Keep a steady horizontal field of view so portrait phones still see ahead. */
@@ -204,7 +210,6 @@ export class Game {
     this.level = buildLevel(this.scene, stage, this.theme, this.tex, rng);
     this.world = new World(this.scene, this.renderer, this.camera, this.level, this.theme, this.tex, rng, this.quality);
     this.scene.add(this.cat.group);
-    this.world.resize(window.innerWidth, window.innerHeight);
     this.sfx.setAmbience(this.theme.ambience);
     this.ui.setTicks(this.level.checkpoints.map((cp) => cp.x / this.level.goalX));
     this.hints = {};
@@ -654,6 +659,29 @@ export class Game {
     requestAnimationFrame(loop);
   }
 
+  /** ?debug: live numbers in the corner, for bug reports. */
+  updateDebug(dt) {
+    this.debugClock = (this.debugClock || 0) + dt;
+    this.debugFrames = (this.debugFrames || 0) + 1;
+    if (this.debugClock < 0.5) return;
+    const fps = this.debugFrames / this.debugClock;
+    this.debugClock = 0;
+    this.debugFrames = 0;
+    const r = this.renderer;
+    const gl = r.getContext();
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'n/a';
+    this.ui.setDebug(
+      [
+        `${fps.toFixed(0)} fps · pr ${r.getPixelRatio()} · ${r.domElement.width}×${r.domElement.height}`,
+        `${this.state} · stage ${this.stage.id} · x ${this.p.x.toFixed(1)} y ${this.p.y.toFixed(2)} · ${this.safe ? 'simple' : 'rich'}`,
+        `calls ${r.info.render.calls} · tris ${r.info.render.triangles} · programs ${r.info.programs?.length ?? '?'}`,
+        `${gpu}`,
+        `ctx lost ${this.contextLost} · gl error ${gl.getError()}`,
+      ].join('\n')
+    );
+  }
+
   /**
    * Resolution follows measured frame time: step down quickly when the device
    * cannot keep up, step up slowly (and only as far as the tier allows) when
@@ -684,7 +712,11 @@ export class Game {
     this.stateT += dt;
     const p = this.p;
     const input = this.input;
-    if (this.state === 'run') this.adaptResolution(dt);
+    // Render resolution is fixed for the session: re-allocating the render
+    // targets mid-run is exactly the kind of thing that blanks a real GPU's
+    // canvas without an error. Opt back in with ?adapt.
+    if (this.state === 'run' && this.params.has('adapt')) this.adaptResolution(dt);
+    if (this.debug) this.updateDebug(dt);
 
     if (input.consume('mute')) this.toggleMute();
     if (input.consume('gfx')) this.setSafeMode(!this.safe, this.safe ? 'rich graphics' : 'simple graphics');
@@ -857,6 +889,15 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 1.4);
     const sx = (Math.random() - 0.5) * this.shake * 0.5;
     const sy = (Math.random() - 0.5) * this.shake * 0.5;
+    if (!Number.isFinite(c.x + c.y + c.z + c.lookX + c.lookY)) {
+      // a NaN camera draws nothing at all; snap back to the target instead
+      console.warn('camera reset');
+      c.x = tx;
+      c.y = ty;
+      c.z = tz;
+      c.lookX = lookX;
+      c.lookY = lookY;
+    }
     this.camera.position.set(c.x + sx, c.y + sy, c.z);
     this.camera.lookAt(c.lookX + sx, c.lookY + sy, 0);
 

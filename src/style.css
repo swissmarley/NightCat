@@ -463,6 +463,21 @@ body.touch #touchzones {
 #corner {
   flex-wrap: wrap;
 }
+
+#debug {
+  display: none;
+  top: auto;
+  left: 14px;
+  bottom: 60px;
+  right: auto;
+  margin: 0;
+  padding: 8px 10px;
+  font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  color: #bfe8ff;
+  background: rgba(6, 7, 15, 0.6);
+  border: 1px solid rgba(191, 232, 255, 0.25);
+  white-space: pre;
+}
 button.touch-only {
   display: none;
 }
