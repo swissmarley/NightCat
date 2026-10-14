@@ -46,8 +46,9 @@ export function buildLevel(scene, stage, theme, tex, rng) {
       if (o.kind === 'cp') {
         level.checkpoints.push(buildCheckpoint(level, ax, top, theme, tex));
       } else if (theme.hanging.has(o.kind)) {
+        // a hanging obstacle only blocks what it visibly occupies: slide under it, or jump over it
         const size = theme.buildHanging(level.group, o.kind, ax, top, rng);
-        level.hangers.push({ x: ax, w: size.w, y0: top + size.clearance, y1: top + 3.5, kind: o.kind });
+        level.hangers.push({ x: ax, w: size.w, y0: top + size.clearance, y1: top + size.height, kind: o.kind });
       } else {
         const size = theme.buildObstacle(level.group, o.kind, ax, top, rng);
         level.obstacles.push({ x: ax, y: top, w: size.w, h: size.h, kind: o.kind });

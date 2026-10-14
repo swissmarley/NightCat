@@ -37,6 +37,8 @@ export class Game {
     this.container = container;
     this.params = new URLSearchParams(location.search);
     this.autopilot = this.params.has('auto');
+    this.autoMode = this.params.get('auto') === 'jump' ? 'jump' : 'slide'; // how the autopilot handles hanging obstacles
+    this.hints = {};
     this.save = loadSave();
 
     this.input = new Input(container);
@@ -170,6 +172,7 @@ export class Game {
     this.world.resize(window.innerWidth, window.innerHeight);
     this.sfx.setAmbience(this.theme.ambience);
     this.ui.setTicks(this.level.checkpoints.map((cp) => cp.x / this.level.goalX));
+    this.hints = {};
     this.resetRun(false);
     this.cam.x = this.p.x + 1.4;
     this.cam.lookX = this.cam.x;
@@ -177,8 +180,30 @@ export class Game {
 
   controlsHint() {
     return this.input.touch
-      ? 'tap right to jump · tap left to slide · hold for height'
-      : '<kbd>space</kbd> jump · <kbd>↓</kbd> slide · hold to jump higher';
+      ? 'tap right to jump · hold left to slide · hold for height'
+      : '<kbd>space</kbd> jump · <kbd>↓</kbd> or right-click slide · hold to jump higher';
+  }
+
+  /** One-time, in-the-moment hints before the first gap and the first hanging obstacle. */
+  maybeHint(p) {
+    const level = this.level;
+    if (!this.hints.hang) {
+      const h = level.hangers.find((o) => o.x > p.x && o.x - p.x < 8.5);
+      if (h) {
+        this.hints.hang = true;
+        this.ui.toast(
+          this.input.touch ? 'something low ahead — hold the left side to slide, or jump high' : 'something low ahead — hold ↓ to slide, or jump high',
+          1900
+        );
+      }
+    }
+    if (!this.hints.gap) {
+      const first = level.platforms[0];
+      if (first.x1 - p.x < 5) {
+        this.hints.gap = true;
+        this.ui.toast(this.input.touch ? 'a gap — tap to jump, hold for distance' : 'a gap — jump, hold for distance', 1600);
+      }
+    }
   }
 
   enterStage(id) {
@@ -207,6 +232,7 @@ export class Game {
     p.sliding = false;
     p.diving = false;
     p.forceSlide = 0;
+    p.slideGrace = 0;
     p.deathKind = null;
     p.deathT = 0;
     p.rot = 0;
@@ -303,14 +329,15 @@ export class Game {
     p.x += speed * h;
 
     if (this.autopilot) this.runAutopilot(h);
+    else this.maybeHint(p);
 
-    // slide / dive
+    // slide / dive — the slide lingers briefly after release so letting go a
+    // hair early under something low doesn't cost the run
     if (p.forceSlide > 0) p.forceSlide -= h;
-    const wantSlide = input.slideHeld || p.forceSlide > 0;
-    if (p.grounded) {
-      if (wantSlide && !p.sliding) this.sfx.slide();
-      p.sliding = wantSlide;
-    } else if (input.consume('slide') && !p.diving) {
+    if (input.slideHeld) p.slideGrace = 0.15;
+    else if (p.slideGrace > 0) p.slideGrace -= h;
+    const wantSlide = input.slideHeld || p.forceSlide > 0 || p.slideGrace > 0;
+    if (!p.grounded && input.consume('slide') && !p.diving) {
       p.diving = true;
       p.vy = Math.min(p.vy, DIVE_V);
       this.sfx.dive();
@@ -387,6 +414,13 @@ export class Game {
       }
     }
 
+    // the slide state is resolved after landing so that touching down with slide
+    // held ducks immediately (landing just before something low is survivable)
+    if (p.grounded) {
+      if (wantSlide && !p.sliding) this.sfx.slide();
+      p.sliding = wantSlide;
+    } else p.sliding = false;
+
     // obstacles (ground) and hanging obstacles
     const hb = p.sliding ? SLIDE_H : p.diving ? DIVE_H : STAND_H;
     const cx0 = p.x - BODY + 0.05;
@@ -446,10 +480,13 @@ export class Game {
     const p = this.p;
     const level = this.level;
     const input = this.input;
-    // slide under anything hanging close ahead
+    // 'slide' mode ducks under anything hanging close ahead; 'jump' mode never
+    // slides and must clear every hanging obstacle with a jump instead
     let wantSlide = false;
-    for (const o of level.hangers) {
-      if (p.x > o.x - o.w / 2 - 0.9 && p.x < o.x + o.w / 2 + 0.35) wantSlide = true;
+    if (this.autoMode === 'slide') {
+      for (const o of level.hangers) {
+        if (p.x > o.x - o.w / 2 - 0.9 && p.x < o.x + o.w / 2 + 0.35) wantSlide = true;
+      }
     }
     input.slideHeld = wantSlide;
     if (!p.grounded) {
@@ -478,6 +515,15 @@ export class Game {
       if (edge > p.x && o.y <= p.y + STEP_TOL + 0.01 && edge - 1.3 < hazard) {
         hazard = edge - 1.3;
         hold = 0.45;
+      }
+    }
+    if (this.autoMode === 'jump') {
+      for (const o of level.hangers) {
+        const edge = o.x - o.w / 2;
+        if (edge > p.x && edge - 1.4 < hazard) {
+          hazard = edge - 1.4;
+          hold = 0.45;
+        }
       }
     }
     if (p.x >= hazard) {
@@ -529,11 +575,13 @@ export class Game {
     }
   }
 
-  /** Headless check: runs the autopilot through a stage without rendering. */
-  simulate(stageId = this.stage.id, maxSeconds = 300) {
+  /** Headless check: runs the autopilot through a stage without rendering. mode: 'slide' | 'jump'. */
+  simulate(stageId = this.stage.id, mode = 'slide', maxSeconds = 300) {
     if (this.stage.id !== stageId) this.loadStage(stageId);
     const wasAuto = this.autopilot;
+    const wasMode = this.autoMode;
     this.autopilot = true;
+    this.autoMode = mode;
     this.resetRun(false);
     this.setState('run');
     let t = 0;
@@ -554,8 +602,9 @@ export class Game {
       }
     }
     this.autopilot = wasAuto;
+    this.autoMode = wasMode;
     const p = this.p;
-    return { stage: stageId, state: this.state, x: p.x, y: p.y, goal: this.level.goalX, kind: p.deathKind, sparks: p.sparks, total: this.world.sparks.length, time: p.runTime, trace };
+    return { stage: stageId, mode, state: this.state, x: p.x, y: p.y, goal: this.level.goalX, kind: p.deathKind, sparks: p.sparks, total: this.world.sparks.length, time: p.runTime, trace };
   }
 
   // --- frame ---------------------------------------------------------------

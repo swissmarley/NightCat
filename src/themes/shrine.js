@@ -66,7 +66,7 @@ export const shrineTheme = {
         roughness: 0.9,
       }),
       shide: new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 0.9, side: THREE.DoubleSide }),
-      rope: new THREE.MeshStandardMaterial({ color: 0x8a7352, roughness: 0.95 }),
+      rope: new THREE.MeshStandardMaterial({ color: 0xb59b6e, roughness: 0.95 }),
       bark: new THREE.MeshStandardMaterial({ map: tex.bark, roughness: 0.95 }),
       canopy: CANOPY.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true })),
       cedar: new THREE.MeshStandardMaterial({ color: 0x0c1c1a, roughness: 1, flatShading: true }),
@@ -205,9 +205,10 @@ export const shrineTheme = {
     const m = this.m;
     const g = new THREE.Group();
     g.position.set(x, top, 0);
+    // tall enough that a cat at the top of its jump passes under the beams
     for (const s of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 2.85, 10), m.torii);
-      post.position.set(0, 1.42, s * 1.25);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 3.6, 10), m.torii);
+      post.position.set(0, 1.8, s * 1.25);
       post.castShadow = true;
       g.add(post);
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.2, 10), m.toriiDark);
@@ -215,46 +216,49 @@ export const shrineTheme = {
       g.add(foot);
     }
     const kasagi = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 3.4), m.toriiDark);
-    kasagi.position.set(0, 2.95, 0);
+    kasagi.position.set(0, 3.7, 0);
     kasagi.castShadow = true;
     g.add(kasagi);
     const shimaki = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 3.2), m.torii);
-    shimaki.position.set(0, 2.78, 0);
+    shimaki.position.set(0, 3.53, 0);
     g.add(shimaki);
     const nuki = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 3.0), m.torii);
-    nuki.position.set(0, 2.25, 0);
+    nuki.position.set(0, 3.0, 0);
     nuki.castShadow = true;
     g.add(nuki);
     if (rope) {
-      const ry = rope === 'low' ? 0.98 : 2.05;
-      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 8), m.rope);
+      // the low rope hangs at head height: slide under it or clear it with a jump
+      const ry = rope === 'low' ? 0.98 : 2.6;
+      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.6, 8), m.rope);
       r.rotation.x = Math.PI / 2;
       r.position.set(0, ry, 0);
       r.castShadow = true;
       g.add(r);
-      for (let i = 0; i < 5; i++) {
-        const z = -1.0 + i * 0.5;
+      for (let i = 0; i < 6; i++) {
+        const z = -1.1 + i * 0.44;
         const len = rope === 'low' ? 0.5 : 0.45;
-        const shide = new THREE.Mesh(new THREE.PlaneGeometry(0.11, len), m.shide);
-        shide.position.set(0.02, ry - len / 2 - 0.03, z);
+        const shide = new THREE.Mesh(new THREE.PlaneGeometry(0.12, len), m.shide);
+        shide.position.set(0.02, ry - len / 2 - 0.04, z);
         shide.rotation.y = (i % 2 ? 1 : -1) * 0.25;
         g.add(shide);
-        const tassel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.015, 0.22, 5), m.rope);
-        tassel.position.set(-0.02, ry - 0.16, z + 0.25);
-        g.add(tassel);
+        if (i < 5) {
+          const tassel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.015, 0.24, 5), m.rope);
+          tassel.position.set(-0.02, ry - 0.17, z + 0.22);
+          g.add(tassel);
+        }
       }
     }
     if (withLanterns) {
       for (const s of [-1, 1]) {
         const lan = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), m.lantern);
         lan.scale.set(1, 1.3, 1);
-        lan.position.set(0, 1.78, s * 0.75);
+        lan.position.set(0, 2.45, s * 0.75);
         g.add(lan);
-        const str = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.25, 4), m.toriiDark);
-        str.position.set(0, 2.08, s * 0.75);
+        const str = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.3, 4), m.toriiDark);
+        str.position.set(0, 2.78, s * 0.75);
         g.add(str);
       }
-      world.fixtures.push({ x, y: top + 1.75, z: 0, color: 0xff9a4a, intensity: 7, distance: 9, flicker: true });
+      world.fixtures.push({ x, y: top + 2.4, z: 0, color: 0xff9a4a, intensity: 7, distance: 9, flicker: true });
     }
     group.add(g);
   },
@@ -262,7 +266,7 @@ export const shrineTheme = {
   buildHanging(group, kind, x, top, rng) {
     if (kind === 'rope') {
       this.torii(group, x, top, 'low', false, null);
-      return { w: 0.6, clearance: 0.42 };
+      return { w: 0.6, clearance: 0.42, height: 1.08 };
     }
     // branch: a maple leaning over the walk from a rock behind it
     const m = this.m;
@@ -293,7 +297,7 @@ export const shrineTheme = {
       g.add(leaf);
     }
     group.add(g);
-    return { w: 1.4, clearance: 0.42 };
+    return { w: 1.4, clearance: 0.42, height: 1.1 };
   },
 
   buildGoal(level, rng) {
@@ -352,7 +356,7 @@ export const shrineTheme = {
     this.buildToro(world, S);
 
     // decorative torii: one at the start, every ~50u, and one at the goal
-    this.torii(scene, 4, 0, 'high', true, world);
+    this.torii(scene, 7.5, 0, 'high', true, world);
     for (let x = 60; x < level.goalX - 20; x += 50) {
       const p = level.platforms.find((pl) => pl.x0 + 1.5 <= x && pl.x1 - 1.5 >= x);
       if (p && !level.hangers.some((h) => Math.abs(h.x - x) < 4)) this.torii(scene, x, p.top, 'high', true, world);
