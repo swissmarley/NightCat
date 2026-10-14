@@ -1,7 +1,7 @@
 // Procedural canvas textures — no external assets, everything is generated at load.
 import * as THREE from 'three';
 
-/** Small deterministic PRNG (mulberry32) so the street looks the same every run. */
+/** Small deterministic PRNG (mulberry32) so a stage looks the same every run. */
 export function makeRng(seed) {
   let a = seed >>> 0;
   return function rng() {
@@ -40,7 +40,7 @@ function finish(c, { repeat = true, srgb = true, anisotropy = 4 } = {}) {
   return tex;
 }
 
-/** Old brick / stone wall, used for the catwalk walls. 1 tile ≈ 2 world units. */
+/** Old brick wall, used for the street catwalk. 1 tile ≈ 2 world units. */
 export function brickTexture(rng) {
   const W = 256;
   const c = canvas(W, W);
@@ -59,7 +59,6 @@ export function brickTexture(rng) {
       const lum = 21 + rng() * 12;
       g.fillStyle = `hsl(${hue}, ${sat}%, ${lum}%)`;
       g.fillRect(x, y, bw - 2, bh - 2);
-      // subtle highlight edge
       g.fillStyle = `hsla(${hue}, ${sat}%, ${lum + 8}%, 0.5)`;
       g.fillRect(x, y, bw - 2, 1);
     }
@@ -85,6 +84,61 @@ export function stoneTexture(rng) {
   return finish(c);
 }
 
+/** Irregular stone blocks with moss creeping over them (shrine walls). 1 tile ≈ 2u. */
+export function mossStoneTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#151a16';
+  g.fillRect(0, 0, W, W);
+  let y = 0;
+  while (y < W) {
+    const rh = 18 + rng() * 14;
+    let x = -rng() * 30;
+    while (x < W) {
+      const rw = 26 + rng() * 40;
+      const hue = 90 + rng() * 60;
+      const sat = 6 + rng() * 10;
+      const lum = 20 + rng() * 10;
+      g.fillStyle = `hsl(${hue}, ${sat}%, ${lum}%)`;
+      g.fillRect(x + 1.5, y + 1.5, rw - 3, rh - 3);
+      g.fillStyle = `hsla(${hue}, ${sat}%, ${lum + 7}%, 0.6)`;
+      g.fillRect(x + 1.5, y + 1.5, rw - 3, 1.5);
+      x += rw;
+    }
+    y += rh;
+  }
+  for (let i = 0; i < 90; i++) {
+    g.fillStyle = `hsla(${100 + rng() * 30}, ${28 + rng() * 18}%, ${18 + rng() * 12}%, ${0.12 + rng() * 0.3})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 4 + rng() * 12, 2 + rng() * 5, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  addNoise(g, W, W, 20, rng);
+  return finish(c);
+}
+
+/** Tree bark — vertical streaks. */
+export function barkTexture(rng) {
+  const W = 128;
+  const H = 256;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#2e2119';
+  g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 90; i++) {
+    const x = rng() * W;
+    g.strokeStyle = `hsla(${18 + rng() * 14}, ${20 + rng() * 15}%, ${10 + rng() * 18}%, ${0.4 + rng() * 0.5})`;
+    g.lineWidth = 1 + rng() * 3;
+    g.beginPath();
+    g.moveTo(x, -5);
+    g.bezierCurveTo(x + (rng() - 0.5) * 12, H * 0.3, x + (rng() - 0.5) * 12, H * 0.7, x + (rng() - 0.5) * 6, H + 5);
+    g.stroke();
+  }
+  addNoise(g, W, H, 16, rng);
+  return finish(c);
+}
+
 /** Wet asphalt: colour map + a roughness map with glossy puddles. */
 export function asphaltMaps(rng) {
   const W = 256;
@@ -101,10 +155,10 @@ export function asphaltMaps(rng) {
 
   const r = canvas(W, W);
   const rg = r.getContext('2d');
-  rg.fillStyle = 'rgb(140,140,140)'; // roughness 0.55 baseline
+  rg.fillStyle = 'rgb(140,140,140)';
   rg.fillRect(0, 0, W, W);
   for (let i = 0; i < 14; i++) {
-    rg.fillStyle = 'rgb(22,22,22)'; // puddles: nearly mirror
+    rg.fillStyle = 'rgb(22,22,22)';
     rg.beginPath();
     rg.ellipse(rng() * W, rng() * W, 12 + rng() * 40, 6 + rng() * 18, rng() * Math.PI, 0, Math.PI * 2);
     rg.fill();
@@ -134,7 +188,6 @@ export function windowTexture(rng, cols, rows, { litProb = 0.42, wall = '#16161e
         g.globalAlpha = alpha;
         g.fillStyle = col;
         g.fillRect(px, py, cw - 8, ch - 8);
-        // curtain / mullion
         g.globalAlpha = alpha * 0.5;
         g.fillStyle = '#000';
         g.fillRect(px + (cw - 8) / 2 - 0.5, py, 1, ch - 8);
@@ -166,7 +219,46 @@ export function glowTexture() {
   return finish(c, { repeat: false });
 }
 
-/** Plank texture for crates. */
+/** Wide, soft blob used for mist banks and dust puffs. */
+export function mistTexture() {
+  const W = 256;
+  const H = 128;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.save();
+  g.scale(1, H / W);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, W);
+  g.restore();
+  return finish(c, { repeat: false });
+}
+
+/** A single leaf silhouette (white, alpha), tinted per instance. */
+export function leafTexture() {
+  const W = 64;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, W);
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.moveTo(4, 32);
+  g.bezierCurveTo(16, 4, 48, 4, 60, 32);
+  g.bezierCurveTo(48, 60, 16, 60, 4, 32);
+  g.fill();
+  g.strokeStyle = 'rgba(0,0,0,0.35)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(6, 32);
+  g.lineTo(58, 32);
+  g.stroke();
+  return finish(c, { repeat: false });
+}
+
+/** Plank texture for crates and footbridges. */
 export function woodTexture(rng) {
   const W = 128;
   const c = canvas(W, W);
@@ -188,13 +280,65 @@ export function woodTexture(rng) {
 }
 
 /**
+ * Tileable water normal map: a few integer-frequency waves plus ripples,
+ * converted to normals with finite differences.
+ */
+export function waterNormalsTexture(rng) {
+  const W = 256;
+  const h = new Float32Array(W * W);
+  const waves = [];
+  for (let i = 0; i < 7; i++) {
+    waves.push({
+      fx: Math.round(1 + rng() * 5) * (rng() < 0.5 ? 1 : -1),
+      fy: Math.round(1 + rng() * 5) * (rng() < 0.5 ? 1 : -1),
+      ph: rng() * Math.PI * 2,
+      amp: 0.4 + rng() * 0.8,
+    });
+  }
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (const w of waves) v += w.amp * Math.sin(((w.fx * x + w.fy * y) / W) * Math.PI * 2 + w.ph);
+      v += (rng() - 0.5) * 0.25;
+      h[y * W + x] = v;
+    }
+  }
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  const img = g.createImageData(W, W);
+  const d = img.data;
+  const strength = 2.2;
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const l = h[y * W + ((x - 1 + W) % W)];
+      const r = h[y * W + ((x + 1) % W)];
+      const u = h[((y - 1 + W) % W) * W + x];
+      const dn = h[((y + 1) % W) * W + x];
+      let nx = (l - r) * strength;
+      let ny = (u - dn) * strength;
+      let nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      nx /= len;
+      ny /= len;
+      nz /= len;
+      const i = (y * W + x) * 4;
+      d[i] = (nx * 0.5 + 0.5) * 255;
+      d[i + 1] = (ny * 0.5 + 0.5) * 255;
+      d[i + 2] = (nz * 0.5 + 0.5) * 255;
+      d[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return finish(c, { srgb: false });
+}
+
+/**
  * BoxGeometry with UVs scaled so one texture tile covers `tile` world units on
  * every face (BoxGeometry's default UVs stretch one tile across each face).
  */
 export function boxWorldUV(w, h, d, tile = 2) {
   const geo = new THREE.BoxGeometry(w, h, d);
   const uv = geo.attributes.uv;
-  // face order: +x, -x, +y, -y, +z, -z — 4 verts each
   const dims = [
     [d, h],
     [d, h],

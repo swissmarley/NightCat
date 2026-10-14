@@ -1,19 +1,12 @@
-// Scene dressing: sky, street, buildings, lamps, lanterns, rain, lights & post-processing.
+// Shared scene engine: lights (a pool of real point lights handed to the nearest
+// fixtures), sky, sparks, dust puffs, and post-processing. Stage-specific
+// dressing lives in themes/*.js.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { STREET_Y } from './level.js';
-import { windowTexture } from './textures.js';
-
-const LAMP_LIGHTS = 6;
-const LANTERN_LIGHTS = 3;
-// three.js uses physical light units: point lights in candela, so values look large.
-const LAMP_INTENSITY = 42;
-const LANTERN_INTENSITY = 9;
-const RAIN_COUNT = 650;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smoothstep = (e0, e1, x) => {
@@ -47,38 +40,41 @@ const VignetteGrainShader = {
 };
 
 export class World {
-  constructor(scene, renderer, camera, level, tex, rng) {
+  constructor(scene, renderer, camera, level, theme, tex, rng, quality) {
     this.scene = scene;
     this.renderer = renderer;
     this.camera = camera;
     this.level = level;
+    this.theme = theme;
     this.tex = tex;
     this.rng = rng;
+    this.quality = quality;
     this.t = 0;
+    this.fixtures = [...level.fixtures];
+    this.themeState = null;
 
-    scene.background = new THREE.Color(0x06070f);
-    scene.fog = new THREE.Fog(0x080a16, 14, 52);
+    const c = theme.colors;
+    scene.background = new THREE.Color(c.bg);
+    scene.fog = new THREE.Fog(c.fog, c.fogNear, c.fogFar);
 
     this.buildLights();
     this.buildSky();
-    this.buildStreet();
-    this.buildBuildings();
-    this.buildLamps();
-    this.buildLanterns();
+    theme.dress(this);
     this.buildSparks();
-    this.buildRain();
+    this.buildDust();
     this.buildPost();
   }
 
   // --- lighting -------------------------------------------------------------
   buildLights() {
     const s = this.scene;
-    s.add(new THREE.HemisphereLight(0x2b3a6a, 0x160e0a, 1.5));
+    const c = this.theme.colors;
+    s.add(new THREE.HemisphereLight(c.hemiSky, c.hemiGround, c.hemiInt));
 
     // Moonlight — the one shadow-casting light; its frustum follows the cat.
-    const moon = new THREE.DirectionalLight(0x7c8fd0, 3.6);
+    const moon = new THREE.DirectionalLight(c.moon, c.moonInt);
     moon.castShadow = true;
-    moon.shadow.mapSize.set(1024, 1024);
+    moon.shadow.mapSize.set(this.quality.shadow, this.quality.shadow);
     moon.shadow.camera.near = 1;
     moon.shadow.camera.far = 50;
     moon.shadow.camera.left = -9;
@@ -93,62 +89,56 @@ export class World {
     this.moon = moon;
 
     // Soft fill that follows the cat so it always reads against the dark.
-    this.catFill = new THREE.PointLight(0x8fb0ff, 5.5, 7, 2);
+    this.catFill = new THREE.PointLight(c.fill, 5.5, 7, 2);
     s.add(this.catFill);
 
-    this.lampLights = [];
-    for (let i = 0; i < LAMP_LIGHTS; i++) {
-      const l = new THREE.PointLight(0xffb978, 0, 17, 2);
+    this.pool = [];
+    for (let i = 0; i < this.quality.lights; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 16, 2);
       s.add(l);
-      this.lampLights.push(l);
+      this.pool.push(l);
     }
-    this.lanternLights = [];
-    for (let i = 0; i < LANTERN_LIGHTS; i++) {
-      const l = new THREE.PointLight(0xff7a4a, 0, 9, 2);
-      s.add(l);
-      this.lanternLights.push(l);
-    }
-    this.homeLight = new THREE.PointLight(0xffc27a, 9, 11, 2);
-    const hl = this.level.homeLight;
-    this.homeLight.position.set(hl.x, hl.y, hl.z);
-    s.add(this.homeLight);
   }
 
   // --- sky ---------------------------------------------------------------------
   buildSky() {
+    const c = this.theme.colors;
     this.sky = new THREE.Group();
     const backdrop = new THREE.Mesh(
       new THREE.PlaneGeometry(420, 190),
       new THREE.ShaderMaterial({
-        uniforms: {},
+        uniforms: {
+          top: { value: new THREE.Vector3(...c.skyTop) },
+          mid: { value: new THREE.Vector3(...c.skyMid) },
+          hor: { value: new THREE.Vector3(...c.skyHor) },
+        },
         depthWrite: false,
         fog: false,
         vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
         fragmentShader: /* glsl */ `
+          uniform vec3 top; uniform vec3 mid; uniform vec3 hor;
           varying vec2 vUv;
           void main(){
-            vec3 top = vec3(0.012, 0.014, 0.045);
-            vec3 mid = vec3(0.05, 0.045, 0.12);
-            vec3 hor = vec3(0.16, 0.09, 0.13);
             float h = vUv.y;
-            vec3 c = mix(hor, mid, smoothstep(0.18, 0.42, h));
-            c = mix(c, top, smoothstep(0.42, 0.95, h));
-            gl_FragColor = vec4(c, 1.0);
+            vec3 col = mix(hor, mid, smoothstep(0.18, 0.42, h));
+            col = mix(col, top, smoothstep(0.42, 0.95, h));
+            gl_FragColor = vec4(col, 1.0);
           }`,
       })
     );
     backdrop.position.set(0, 40, -95);
     this.sky.add(backdrop);
 
-    // moon
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xe9ecff, fog: false });
-    const moon = new THREE.Mesh(new THREE.CircleGeometry(3.6, 40), moonMat);
-    moon.position.set(28, 42, -92);
+    const moon = new THREE.Mesh(
+      new THREE.CircleGeometry(c.moonSize, 40),
+      new THREE.MeshBasicMaterial({ color: 0xe9ecff, fog: false })
+    );
+    moon.position.set(...c.moonPos);
     this.sky.add(moon);
     const halo = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: this.tex.glow,
-        color: 0x9fb0ff,
+        color: c.moonHalo,
         transparent: true,
         opacity: 0.55,
         blending: THREE.AdditiveBlending,
@@ -158,11 +148,10 @@ export class World {
     );
     halo.position.copy(moon.position);
     halo.position.z += 0.5;
-    halo.scale.set(34, 34, 1);
+    halo.scale.set(c.moonSize * 9.5, c.moonSize * 9.5, 1);
     this.sky.add(halo);
 
-    // stars
-    const n = 420;
+    const n = c.starCount;
     const pos = new Float32Array(n * 3);
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -178,230 +167,35 @@ export class World {
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     sg.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const stars = new THREE.Points(
-      sg,
-      new THREE.PointsMaterial({ size: 0.55, vertexColors: true, transparent: true, opacity: 0.9, fog: false, depthWrite: false })
+    this.sky.add(
+      new THREE.Points(
+        sg,
+        new THREE.PointsMaterial({ size: 0.55, vertexColors: true, transparent: true, opacity: 0.9, fog: false, depthWrite: false })
+      )
     );
-    this.sky.add(stars);
     this.scene.add(this.sky);
-  }
-
-  // --- street ------------------------------------------------------------------
-  buildStreet() {
-    const { map, roughnessMap } = this.tex.asphalt;
-    map.repeat.set(140, 10);
-    roughnessMap.repeat.set(140, 10);
-    const mat = new THREE.MeshStandardMaterial({
-      map,
-      roughnessMap,
-      roughness: 1,
-      metalness: 0.05,
-      color: 0x9a9aa6,
-    });
-    const len = this.level.endX + 160;
-    const street = new THREE.Mesh(new THREE.PlaneGeometry(len, 36), mat);
-    street.rotation.x = -Math.PI / 2;
-    street.position.set(len / 2 - 60, STREET_Y, -6);
-    street.receiveShadow = true;
-    this.scene.add(street);
-
-    // kerb in front of the walls
-    const kerb = new THREE.Mesh(
-      new THREE.BoxGeometry(len, 0.18, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.7 })
-    );
-    kerb.position.set(len / 2 - 60, STREET_Y + 0.09, 1.6);
-    kerb.receiveShadow = true;
-    this.scene.add(kerb);
-  }
-
-  // --- buildings ----------------------------------------------------------------
-  buildBuildings() {
-    const rng = this.rng;
-    const group = new THREE.Group();
-    const from = -50;
-    const to = this.level.endX + 90;
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x15151c, roughness: 0.9 });
-    const detailMat = new THREE.MeshStandardMaterial({ color: 0x1c1c24, roughness: 0.8 });
-
-    const row = (z, depth, wMin, wMax, hMin, hMax, litProb, dim, wallL) => {
-      let x = from;
-      while (x < to) {
-        const w = wMin + rng() * (wMax - wMin);
-        const h = hMin + rng() * (hMax - hMin);
-        const cols = Math.max(3, Math.floor(w / 1.05));
-        const rows = Math.max(3, Math.floor(h / 1.0));
-        const hue = 215 + rng() * 40;
-        const wall = `hsl(${hue}, ${8 + rng() * 10}%, ${wallL + rng() * 3}%)`;
-        const wtex = windowTexture(rng, cols, rows, { litProb, wall, dim });
-        const side = new THREE.MeshStandardMaterial({ color: new THREE.Color(wall).multiplyScalar(0.8), roughness: 0.95 });
-        const front = new THREE.MeshStandardMaterial({
-          map: wtex,
-          emissiveMap: wtex,
-          emissive: 0xffffff,
-          emissiveIntensity: 0.75,
-          roughness: 0.9,
-        });
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), [side, side, roofMat, side, front, side]);
-        mesh.position.set(x + w / 2, STREET_Y + h / 2, z);
-        mesh.receiveShadow = true;
-        group.add(mesh);
-
-        // rooftop details
-        if (rng() < 0.5) {
-          const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.1, 10), detailMat);
-          tank.position.set(x + w * (0.2 + rng() * 0.6), STREET_Y + h + 0.55, z);
-          group.add(tank);
-        }
-        if (rng() < 0.6) {
-          const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6 + rng() * 1.5, 5), detailMat);
-          ant.position.set(x + w * rng(), STREET_Y + h + 0.8, z);
-          group.add(ant);
-        }
-        if (rng() < 0.4) {
-          const chim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.5), detailMat);
-          chim.position.set(x + w * rng(), STREET_Y + h + 0.45, z + depth * 0.3);
-          group.add(chim);
-        }
-        x += w + 0.25 + rng() * 1.6;
-      }
-    };
-
-    row(-9.5, 6, 6, 12, 5.5, 11, 0.34, 1.0, 12); // near row
-    row(-19, 8, 8, 16, 10, 22, 0.26, 0.6, 9); // mid row
-    row(-34, 10, 10, 22, 14, 32, 0.16, 0.35, 7); // far silhouettes
-    this.scene.add(group);
-  }
-
-  // --- street lamps -----------------------------------------------------------------
-  buildLamps() {
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x1a1b22, roughness: 0.55, metalness: 0.5 });
-    const glassMat = new THREE.MeshStandardMaterial({
-      color: 0x120800,
-      emissive: 0xffc27a,
-      emissiveIntensity: 5.0,
-      roughness: 0.3,
-    });
-    const postGeo = new THREE.CylinderGeometry(0.055, 0.08, 5.6, 10);
-    const armGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.0, 8);
-    const capGeo = new THREE.ConeGeometry(0.26, 0.2, 6);
-    const glassGeo = new THREE.BoxGeometry(0.24, 0.3, 0.24);
-    const frameGeo = new THREE.BoxGeometry(0.3, 0.05, 0.3);
-    const glowMat = new THREE.SpriteMaterial({
-      map: this.tex.glow,
-      color: 0xffb060,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-
-    this.lamps = [];
-    for (const l of this.level.lamps) {
-      const g = new THREE.Group();
-      const z = -1.9;
-      g.position.set(l.x, STREET_Y, z);
-      const post = new THREE.Mesh(postGeo, postMat);
-      post.position.y = 2.8;
-      post.castShadow = true;
-      g.add(post);
-      const arm = new THREE.Mesh(armGeo, postMat);
-      arm.rotation.x = Math.PI / 2;
-      arm.position.set(0, 5.55, 0.5);
-      g.add(arm);
-      const headY = 5.2;
-      const headZ = 1.0;
-      const frame = new THREE.Mesh(frameGeo, postMat);
-      frame.position.set(0, headY + 0.18, headZ);
-      g.add(frame);
-      const glass = new THREE.Mesh(glassGeo, glassMat);
-      glass.position.set(0, headY, headZ);
-      g.add(glass);
-      const cap = new THREE.Mesh(capGeo, postMat);
-      cap.position.set(0, headY + 0.28, headZ);
-      g.add(cap);
-      const bottom = new THREE.Mesh(frameGeo, postMat);
-      bottom.position.set(0, headY - 0.17, headZ);
-      g.add(bottom);
-      const glow = new THREE.Sprite(glowMat);
-      glow.position.set(0, headY, headZ);
-      glow.scale.set(2.6, 2.6, 1);
-      g.add(glow);
-      this.scene.add(g);
-      this.lamps.push({ x: l.x, y: STREET_Y + headY, z: z + headZ, glow });
-    }
-  }
-
-  // --- paper lanterns ------------------------------------------------------------------
-  buildLanterns() {
-    const colors = [0xff5a3a, 0xff8a3a, 0xff4a5a, 0xffb05a];
-    const geo = new THREE.SphereGeometry(0.17, 14, 12);
-    const capGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.05, 8);
-    const capMat = new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.8 });
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x0c0c10, transparent: true, opacity: 0.6 });
-    this.lanternStrings = [];
-    for (const s of this.level.lanternStrings) {
-      const g = new THREE.Group();
-      const items = [];
-      const pts = [];
-      const width = (s.n - 1) * 1.15;
-      for (let i = 0; i < s.n; i++) {
-        const x = s.x0 + i * 1.15;
-        const u = s.n > 1 ? i / (s.n - 1) : 0.5;
-        const sag = s.goal ? 0 : 0.35 * Math.sin(u * Math.PI);
-        const y = s.y - sag;
-        const col = colors[Math.floor(this.rng() * colors.length)];
-        const mat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(col).multiplyScalar(0.15),
-          emissive: col,
-          emissiveIntensity: 2.2,
-          roughness: 0.9,
-        });
-        const pivot = new THREE.Group();
-        pivot.position.set(x, y + 0.3, s.z);
-        const m = new THREE.Mesh(geo, mat);
-        m.scale.set(1, 1.25, 1);
-        m.position.y = -0.3;
-        pivot.add(m);
-        const cap = new THREE.Mesh(capGeo, capMat);
-        cap.position.y = -0.07;
-        pivot.add(cap);
-        const str = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 4), capMat);
-        str.position.y = -0.05 + 0.2;
-        pivot.add(str);
-        g.add(pivot);
-        items.push({ pivot, phase: this.rng() * 6.28, color: col });
-        pts.push(new THREE.Vector3(x, y + 0.3, s.z));
-      }
-      if (s.n > 1) {
-        pts.unshift(new THREE.Vector3(s.x0 - 0.8, s.y + 0.45, s.z));
-        pts.push(new THREE.Vector3(s.x0 + width + 0.8, s.y + 0.45, s.z));
-        g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
-      }
-      this.scene.add(g);
-      this.lanternStrings.push({ x: s.x0 + width / 2, y: s.y - 0.3, z: s.z, items, color: items[0].color });
-    }
   }
 
   // --- sparks (collectibles) ------------------------------------------------------------
   buildSparks() {
-    const coreMat = new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0xcfe9ff, emissiveIntensity: 2.0 });
+    const col = this.theme.colors.spark;
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x223344, emissive: col, emissiveIntensity: 2.0 });
     const geo = new THREE.SphereGeometry(0.07, 10, 8);
-    const glowMat = new THREE.SpriteMaterial({
-      map: this.tex.glow,
-      color: 0x9fd0ff,
-      transparent: true,
-      opacity: 0.4,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
     this.sparks = [];
     for (const s of this.level.sparks) {
       const g = new THREE.Group();
       g.position.set(s.x, s.y, 0);
-      const core = new THREE.Mesh(geo, coreMat);
-      g.add(core);
-      const glow = new THREE.Sprite(glowMat.clone());
+      g.add(new THREE.Mesh(geo, coreMat));
+      const glow = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.tex.glow,
+          color: col,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
       glow.scale.set(0.9, 0.9, 1);
       g.add(glow);
       this.scene.add(g);
@@ -409,8 +203,9 @@ export class World {
     }
   }
 
-  resetSparks() {
+  resetSparks(fromX = -Infinity) {
     for (const s of this.sparks) {
+      if (s.x < fromX) continue;
       s.alive = true;
       s.burst = 0;
       s.group.visible = true;
@@ -424,34 +219,40 @@ export class World {
     s.burst = 0.001;
   }
 
-  // --- rain -----------------------------------------------------------------------------
-  buildRain() {
-    const pos = new Float32Array(RAIN_COUNT * 2 * 3);
-    this.rainVel = new Float32Array(RAIN_COUNT);
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      this.rainVel[i] = 9 + this.rng() * 4;
-      this.seedDrop(pos, i, 0, true);
+  // --- dust puffs ------------------------------------------------------------------------
+  buildDust() {
+    this.dust = [];
+    const mat = new THREE.SpriteMaterial({
+      map: this.tex.mist,
+      color: this.theme.colors.puff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    for (let i = 0; i < 28; i++) {
+      const sp = new THREE.Sprite(mat.clone());
+      sp.visible = false;
+      this.scene.add(sp);
+      this.dust.push({ sp, life: 0, max: 1, vx: 0, vy: 0, grow: 1 });
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.rain = new THREE.LineSegments(
-      geo,
-      new THREE.LineBasicMaterial({ color: 0x8d9bc2, transparent: true, opacity: 0.2, depthWrite: false })
-    );
-    this.rain.frustumCulled = false;
-    this.scene.add(this.rain);
   }
-  seedDrop(pos, i, camX, randomY) {
-    const x = camX + (this.rng() - 0.5) * 60;
-    const y = randomY ? -4 + this.rng() * 20 : 14 + this.rng() * 3;
-    const z = -14 + this.rng() * 24;
-    const len = 0.25 + this.rng() * 0.2;
-    pos[i * 6] = x;
-    pos[i * 6 + 1] = y;
-    pos[i * 6 + 2] = z;
-    pos[i * 6 + 3] = x - 0.06;
-    pos[i * 6 + 4] = y + len;
-    pos[i * 6 + 5] = z;
+
+  /** Burst `n` soft puffs at (x, y). strength scales size/speed; color overrides the theme tint. */
+  puff(x, y, n = 6, strength = 1, color = null) {
+    let spawned = 0;
+    for (const d of this.dust) {
+      if (d.life > 0) continue;
+      d.life = d.max = 0.45 + this.rng() * 0.3;
+      d.vx = (this.rng() - 0.5) * 2.2 * strength;
+      d.vy = (0.4 + this.rng() * 1.2) * strength;
+      d.grow = (0.6 + this.rng() * 0.5) * strength;
+      d.sp.position.set(x + (this.rng() - 0.5) * 0.5, y + 0.05 + this.rng() * 0.1, 0.3 + this.rng() * 0.4);
+      d.sp.scale.set(0.3, 0.2, 1);
+      d.sp.material.color.setHex(color ?? this.theme.colors.puff);
+      d.sp.material.opacity = 0.35;
+      d.sp.visible = true;
+      if (++spawned >= n) break;
+    }
   }
 
   // --- post-processing ---------------------------------------------------------------------
@@ -459,10 +260,14 @@ export class World {
     const r = this.renderer;
     const size = r.getSize(new THREE.Vector2());
     const pr = r.getPixelRatio();
-    const rt = new THREE.WebGLRenderTarget(size.x * pr, size.y * pr, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(size.x * pr, size.y * pr, {
+      type: THREE.HalfFloatType,
+      samples: this.quality.msaa,
+    });
     this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.75, 0.6, 0.92);
+    const bs = this.quality.bloomScale;
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x * bs, size.y * bs), 0.75, 0.6, 0.92);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(VignetteGrainShader);
     this.composer.addPass(this.grade);
@@ -470,8 +275,10 @@ export class World {
   }
 
   resize(w, h) {
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(w, h);
-    this.bloom.setSize(w, h);
+    const bs = this.quality.bloomScale;
+    this.bloom.setSize(w * bs, h * bs);
   }
 
   render() {
@@ -484,58 +291,36 @@ export class World {
     const t = this.t;
     this.grade.uniforms.time.value = t;
 
-    // sky follows the camera horizontally
     this.sky.position.x = camX;
-
-    // moon shadow frustum follows the cat
     this.moon.position.set(catX - 8, 16, 10);
     this.moon.target.position.set(catX, 0, 0);
     this.catFill.position.set(catX + 0.6, catY + 1.5, 1.8);
 
-    // nearest lamps get the real point lights
-    const lamps = this.lamps
-      .map((l) => ({ l, d: Math.abs(l.x - catX) }))
-      .sort((a, b) => a.d - b.d);
-    for (let i = 0; i < LAMP_LIGHTS; i++) {
-      const light = this.lampLights[i];
-      const e = lamps[i];
+    // hand the real lights to the fixtures nearest the cat
+    const near = [];
+    for (const f of this.fixtures) {
+      if (f.intensity <= 0) continue;
+      const d = Math.abs(f.x - catX);
+      if (d < 34) near.push({ f, d });
+    }
+    near.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < this.pool.length; i++) {
+      const light = this.pool[i];
+      const e = near[i];
       if (!e) {
         light.intensity = 0;
         continue;
       }
-      light.position.set(e.l.x, e.l.y, e.l.z);
-      const flicker = 1 + 0.035 * Math.sin(t * 17 + e.l.x) * Math.sin(t * 5.3 + e.l.x * 0.7);
-      light.intensity = LAMP_INTENSITY * smoothstep(30, 18, e.d) * flicker;
-    }
-    for (const e of lamps) {
-      const f = 1 + 0.08 * Math.sin(t * 11 + e.l.x) * Math.sin(t * 3.7 + e.l.x * 1.3);
-      e.l.glow.material.opacity = 0.6 * f;
-    }
-
-    // lanterns sway; nearest strings get lights
-    const strings = this.lanternStrings
-      .map((s) => ({ s, d: Math.abs(s.x - catX) }))
-      .sort((a, b) => a.d - b.d);
-    for (let i = 0; i < LANTERN_LIGHTS; i++) {
-      const light = this.lanternLights[i];
-      const e = strings[i];
-      if (!e) {
-        light.intensity = 0;
-        continue;
-      }
-      light.position.set(e.s.x, e.s.y, e.s.z + 0.3);
-      light.color.setHex(e.s.color);
-      light.intensity = LANTERN_INTENSITY * smoothstep(26, 14, e.d);
-    }
-    for (const e of strings) {
-      if (e.d > 40) continue;
-      for (const it of e.s.items) {
-        it.pivot.rotation.z = 0.07 * Math.sin(t * 1.3 + it.phase);
-        it.pivot.rotation.x = 0.05 * Math.sin(t * 0.9 + it.phase * 1.7);
-      }
+      const f = e.f;
+      light.position.set(f.x, f.y, f.z);
+      light.color.setHex(f.color);
+      light.distance = f.distance || 16;
+      const flicker = f.flicker ? 1 + 0.035 * Math.sin(t * 17 + f.x) * Math.sin(t * 5.3 + f.x * 0.7) : 1;
+      light.intensity = f.intensity * smoothstep(30, 18, e.d) * flicker;
     }
 
-    // sparks bob & burst
+    this.theme.update(this, dt, t, catX, camX);
+
     for (const s of this.sparks) {
       if (Math.abs(s.x - catX) > 40) continue;
       if (s.alive) {
@@ -554,18 +339,40 @@ export class World {
       }
     }
 
-    // rain
-    const pos = this.rain.geometry.attributes.position.array;
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      const dy = this.rainVel[i] * dt;
-      const dx = -1.2 * dt;
-      pos[i * 6] += dx;
-      pos[i * 6 + 3] += dx;
-      pos[i * 6 + 1] -= dy;
-      pos[i * 6 + 4] -= dy;
-      if (pos[i * 6 + 1] < STREET_Y) this.seedDrop(pos, i, camX, false);
-      else if (Math.abs(pos[i * 6] - camX) > 32) pos[i * 6] = pos[i * 6 + 3] = camX + (this.rng() - 0.5) * 60;
+    for (const cp of this.level.checkpoints) {
+      if (!cp.active) continue;
+      cp.glow.material.opacity = 0.45 + 0.1 * Math.sin(t * 3);
     }
-    this.rain.geometry.attributes.position.needsUpdate = true;
+
+    for (const d of this.dust) {
+      if (d.life <= 0) continue;
+      d.life -= dt;
+      if (d.life <= 0) {
+        d.sp.visible = false;
+        continue;
+      }
+      const u = 1 - d.life / d.max;
+      d.sp.position.x += d.vx * dt;
+      d.sp.position.y += d.vy * dt;
+      d.vy -= 1.2 * dt;
+      const sc = 0.3 + u * d.grow;
+      d.sp.scale.set(sc * 1.4, sc * 0.9, 1);
+      d.sp.material.opacity = 0.35 * (1 - u) * (1 - u);
+    }
+  }
+
+  dispose() {
+    this.theme.dispose(this);
+    this.composer.dispose();
+    this.scene.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      for (const m of mats) {
+        for (const k of ['map', 'emissiveMap', 'roughnessMap', 'normalMap', 'alphaMap']) {
+          if (m[k] && m[k].dispose && !this.tex.shared.has(m[k])) m[k].dispose();
+        }
+        m.dispose();
+      }
+    });
   }
 }

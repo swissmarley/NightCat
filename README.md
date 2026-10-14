@@ -1,10 +1,12 @@
 # Night Cat
 
-A moody 3D side-scrolling auto-runner. A cat runs along the walls and ledges of a
-rain-slicked night street; the screen never stops, and all you control is the jump.
+A moody 3D side-scrolling auto-runner. A cat runs through the night — along the walls of a
+rain-slicked street, then over a lake to a mountain shrine — and the screen never stops.
+Two verbs: jump and slide.
 
 Built with [three.js](https://threejs.org) and [Vite](https://vite.dev). No art assets —
-the cat, the street, the brick, the lamps and the sound are all generated in code.
+the cat, the stages, the textures and the sound are all generated in code. Plays on
+desktop, phones and tablets.
 
 ## Play
 
@@ -18,53 +20,73 @@ from any sub-path, e.g. GitHub Pages). `npm run preview` serves that build.
 
 ### Controls
 
-| Input                                 | Action                                      |
-| ------------------------------------- | ------------------------------------------- |
-| `Space` / `↑` / `W` / click / tap     | jump — **hold** for a higher, longer jump   |
-| `M`                                   | mute / unmute                               |
+| Input                                            | Action                                        |
+| ------------------------------------------------ | --------------------------------------------- |
+| `Space` / `↑` / `W` / click / tap (right side)   | jump — **hold** for a higher, longer jump     |
+| `↓` / `S` / `Shift` / tap (left third)           | slide under hanging things; in the air: dive  |
+| `P` / `Esc`                                      | pause                                         |
+| `R`                                              | restart the stage                             |
+| `M` / the corner button                          | mute / unmute                                 |
 
 Jump buffering (press slightly before landing) and coyote time (press slightly after
 running off an edge) are built in, and a landing that just barely misses a ledge still
 counts. A cat always finds the ledge.
 
-### The stage — "a night on the walls"
+### The stages
 
-One hand-authored stage, ~40 seconds at pace: gaps, step-ups you must jump onto,
-crates, bins, planters and signboards. Collect the floating **sparks** on the way.
-The run ends at the lit window at the end of the walk — the cat's home.
+- **I · a night on the walls** — brick walls and rooftops along a street in the rain. Crates,
+  bins, planters and signboards to jump; laundry lines and shop signs to slide under.
+- **II · the shrine path** — moss walls and footbridges over a still lake on the way to a
+  mountain shrine. Rocks, fences, fox statues and offering boxes to jump; shimenawa ropes
+  under torii gates and low maple branches to slide under. Faster.
 
-Lose the walk (fall into the street or stumble into something) and the night goes on:
-press to try again from the start.
+Each stage has lanterns that act as **checkpoints** — stumble, and you can continue from
+the last lantern. Collect the floating **sparks** on the way. Clearing a stage gives a rank
+(S: no stumbles and every spark · A: no stumbles · B: ≤2 stumbles · C), and bests are
+remembered on the stage select.
 
 ## How it is made
 
 ```
 src/
-  main.js      bootstrap
-  game.js      state machine (title → run → dead | clear), fixed-step physics, camera
-  level.js     stage layout, platform/obstacle geometry, collision data
-  cat.js       procedural cat (primitives) + procedural animation
-  world.js     sky, street, buildings, lamps, lanterns, rain, lights, post-processing
-  textures.js  canvas-generated textures (brick, stone, wet asphalt, windows, glow)
-  input.js     one-button input (keyboard + pointer)
-  audio.js     WebAudio synth: rain/pad ambience and one-shot effects
-  ui.js        DOM overlays (title, HUD, game over, stage clear)
+  main.js          bootstrap
+  game.js          flow (title → select → ready → run → dead | clear), physics, camera, stage loading
+  stages.js        stage layouts (platforms, gaps, obstacles, checkpoints)
+  level.js         generic stage builder + collision data + checkpoints
+  world.js         shared engine: light pool, sky, sparks, dust, post-processing
+  themes/street.js stage I dressing: buildings, lamps, lanterns, rain, obstacles
+  themes/shrine.js stage II dressing: water, mountains, trees, torii, stone lanterns, mist,
+                   fireflies, falling leaves, obstacles
+  cat.js           procedural cat (primitives) + procedural animation
+  textures.js      canvas-generated textures (brick, moss stone, bark, asphalt, windows,
+                   water normals, glow, mist, leaf)
+  input.js         keyboard + pointer/touch input
+  audio.js         WebAudio synth: rain or mountain-night ambience, one-shot effects
+  ui.js            DOM overlays (title, stage select, HUD, pause, game over, stage clear)
+  save.js          localStorage records
 ```
 
-- **Lighting.** Physically-based materials, a cool moon directional light with a shadow
-  frustum that follows the cat, a warm point light in every nearby street lamp and lantern
-  (a pool of real lights is reassigned to the fixtures closest to the cat each frame), a
-  hemisphere light for the ambient sky/ground bounce, fog for depth, and an HDR bloom pass
-  so the lamp glass, lanterns, windows and the cat's eyes bloom. A final pass adds a soft
-  vignette and a little grain.
+- **Lighting.** Physically-based materials; a cool moon directional light whose shadow
+  frustum follows the cat; a pool of real point lights handed each frame to the fixtures
+  nearest the cat (street lamps, paper lanterns, stone lanterns, lit windows, checkpoints);
+  hemisphere ambient; fog; HDR bloom so lamp glass, lanterns, windows and the cat's eyes
+  bloom; a soft vignette and grain. Stage I adds fake-volumetric light cones under the lamps;
+  stage II adds planar water reflections (three's `Water`) so the moon, lanterns and torii
+  reflect in the lake.
 - **Cat animation.** Fully procedural: a rotary-gallop run cycle, stretch/reach poses in the
-  air blended by vertical velocity, landing squash, takeoff stretch, idle breathing and
-  looking around, a sitting pose for the ending, and a tail that follows a travelling wave.
-  Every joint is smoothed toward its target so transitions stay fluid.
+  air blended by vertical velocity, a dive pose, a belly-down slide, landing squash and
+  takeoff stretch, idle breathing and looking around, a sitting pose for the ending, a tail
+  that follows a travelling wave, blinking, and a bell on the collar.
 - **Physics.** Deterministic 120 Hz fixed step. Variable jump height by releasing early.
+  Hit slow-motion and camera shake, landing dust, and a field of view that widens with speed.
+- **Mobile.** Touch zones (left third slides, the rest jumps), a camera that keeps a constant
+  horizontal field of view so portrait phones still see ahead, safe-area-aware HUD, a quality
+  tier for phones (lower pixel ratio, half-resolution bloom, smaller reflection texture, fewer
+  particles) and adaptive resolution if the frame rate drops. Landscape plays best.
 
 ### Debug
 
-- Append `?auto` to the URL for an autopilot that plays the stage by itself.
-- `window.__catwalk.simulate()` in the console runs the autopilot through the stage
-  without rendering and returns where it ended up (used to verify the stage is completable).
+- Append `?auto` to the URL for an autopilot that plays the stage by itself; `?stage=2`
+  starts on a given stage.
+- `window.__catwalk.simulate(stageId)` in the console runs the autopilot through a stage
+  without rendering and returns where it ended up (used to verify every stage is completable).

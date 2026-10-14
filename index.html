@@ -2,8 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content"
+    />
     <meta name="theme-color" content="#06070f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Night Cat" />
     <title>Night Cat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,18 +28,41 @@
         <div class="hud-left">
           <span class="hud-label">sparks</span>
           <span id="hud-sparks" class="hud-value">0</span>
+          <span id="hud-sparks-total" class="hud-sub">/ 0</span>
         </div>
+        <div class="hud-center"><span id="hud-time" class="hud-time">0:00.0</span></div>
         <div class="hud-right">
-          <div class="progress"><div id="hud-progress" class="progress-fill"></div></div>
+          <div class="progress">
+            <div id="hud-progress" class="progress-fill"></div>
+            <div id="hud-ticks"></div>
+          </div>
         </div>
       </div>
 
+      <div id="stagecard" class="layer">
+        <div class="stagecard-inner">
+          <p class="eyebrow" id="stagecard-num">stage I</p>
+          <h2 class="headline small" id="stagecard-name"></h2>
+          <p class="prompt" id="stagecard-prompt"></p>
+        </div>
+      </div>
+
+      <div id="toast" class="layer"><span id="toast-text"></span></div>
+
       <div id="title" class="layer screen">
         <div class="screen-inner">
-          <p class="eyebrow">a night on the walls</p>
+          <p class="eyebrow">two nights, one cat</p>
           <h1 class="logo">NIGHT CAT</h1>
-          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to begin</p>
-          <p class="hint">hold to jump higher &nbsp;·&nbsp; the street never stops</p>
+          <p class="prompt"><span class="no-touch">press <kbd>space</kbd> · click</span><span class="touch-only">tap</span> &nbsp;to begin</p>
+          <p class="hint portrait-hint">turn your device sideways for the best view</p>
+        </div>
+      </div>
+
+      <div id="select" class="layer screen">
+        <div class="screen-inner wide">
+          <p class="eyebrow">choose a night</p>
+          <div id="cards" class="cards"></div>
+          <p class="hint"><span class="no-touch"><kbd>←</kbd> <kbd>→</kbd> choose · <kbd>space</kbd> start · <kbd>esc</kbd> back</span><span class="touch-only">tap a night to start</span></p>
         </div>
       </div>
 
@@ -41,7 +71,8 @@
           <p class="eyebrow">the night goes on…</p>
           <h2 class="headline" id="gameover-title">lost the walk</h2>
           <p class="stats"><span id="gameover-stats"></span></p>
-          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to try again</p>
+          <p class="prompt" id="gameover-prompt"></p>
+          <p class="hint no-touch"><kbd>esc</kbd> stage select</p>
         </div>
       </div>
 
@@ -49,15 +80,30 @@
         <div class="screen-inner">
           <p class="eyebrow">home at last</p>
           <h2 class="headline">stage clear</h2>
+          <div class="rank"><span id="clear-rank" class="rank-letter">A</span><span class="rank-label">rank</span></div>
           <p class="stats"><span id="clear-stats"></span></p>
-          <p class="prompt">press <kbd>space</kbd> · click · tap &nbsp;to walk again</p>
+          <p class="record" id="clear-record"></p>
+          <p class="prompt" id="clear-prompt"></p>
         </div>
+      </div>
+
+      <div id="pause" class="layer screen">
+        <div class="screen-inner">
+          <h2 class="headline">paused</h2>
+          <p class="prompt"><span class="no-touch"><kbd>space</kbd> resume · <kbd>esc</kbd> stage select</span><span class="touch-only">tap to resume</span></p>
+        </div>
+      </div>
+
+      <div id="touchzones" class="layer">
+        <div class="zone zone-left"><span>▼ slide</span></div>
+        <div class="zone zone-right"><span>▲ jump</span></div>
       </div>
 
       <div id="flash" class="layer"></div>
       <div id="fade" class="layer"></div>
       <div id="corner" class="layer">
-        <span id="mute-hint"><kbd>m</kbd> sound</span>
+        <button id="btn-full" class="corner-btn touch-only" aria-label="fullscreen">⛶</button>
+        <button id="btn-sound" class="corner-btn" aria-label="toggle sound">sound on</button>
       </div>
     </div>
 
