@@ -192,7 +192,9 @@ export class Game {
       if (h) {
         this.hints.hang = true;
         this.ui.toast(
-          this.input.touch ? 'something low ahead — hold the left side to slide, or jump high' : 'something low ahead — hold ↓ to slide, or jump high',
+          this.input.touch
+            ? 'something low ahead — hold the left side to slide under it, or hold jump to leap it'
+            : 'something low ahead — hold ↓ to slide under it, or hold jump to leap it',
           1900
         );
       }

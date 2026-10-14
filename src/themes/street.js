@@ -176,20 +176,22 @@ export const streetTheme = {
     g.position.set(x, top, 0);
     if (kind === 'laundry') {
       // two poles at the back edge, a line between them, washing hanging across the walk
+      // kept narrow (three pieces) so a held jump clears it with a comfortable window
+      const half = 0.8;
       for (const s of [-1, 1]) {
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 1.6, 8), m.iron);
-        pole.position.set(s * 1.05, 0.8, -0.9);
+        pole.position.set(s * half, 0.8, -0.9);
         pole.castShadow = true;
         g.add(pole);
         const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), m.iron);
         arm.rotation.x = Math.PI / 2;
-        arm.position.set(s * 1.05, 1.55, -0.6);
+        arm.position.set(s * half, 1.55, -0.6);
         g.add(arm);
       }
       const pts = [];
       for (let i = 0; i <= 8; i++) {
         const u = i / 8;
-        pts.push(new THREE.Vector3(-1.05 + u * 2.1, 1.5 - 0.08 * Math.sin(u * Math.PI), -0.3));
+        pts.push(new THREE.Vector3(-half + u * half * 2, 1.5 - 0.07 * Math.sin(u * Math.PI), -0.3));
       }
       g.add(
         new THREE.Line(
@@ -198,10 +200,10 @@ export const streetTheme = {
         )
       );
       // every piece hangs down to the same height, just above a sliding cat
-      for (let i = 0; i < 4; i++) {
-        const w = 0.34 + rng() * 0.12;
-        const cx = -0.72 + i * 0.48;
-        const lineY = 1.5 - 0.08 * Math.sin(((cx + 1.05) / 2.1) * Math.PI);
+      for (let i = 0; i < 3; i++) {
+        const w = 0.34 + rng() * 0.1;
+        const cx = -0.5 + i * 0.5;
+        const lineY = 1.5 - 0.07 * Math.sin(((cx + half) / (half * 2)) * Math.PI);
         const h = lineY - 0.44;
         const cloth = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m.cloth[Math.floor(rng() * m.cloth.length)]);
         cloth.position.set(cx, lineY - h / 2, -0.3);
@@ -210,8 +212,8 @@ export const streetTheme = {
         g.add(cloth);
       }
       group.add(g);
-      // collision stops below the line: brushing the hems at the top of a jump is fine
-      return { w: 2.0, clearance: 0.42, height: 1.15 };
+      // collision stops well below the line: brushing the hems at the top of a jump is fine
+      return { w: 1.3, clearance: 0.42, height: 1.0 };
     }
     // hangsign: a bracket from a pole holding a lit sign over the walk
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 2.0, 8), m.iron);
