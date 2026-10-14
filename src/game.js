@@ -52,8 +52,24 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
+    renderer.debug.checkShaderErrors = false;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
+    this.safe = !!this.save.safe || this.params.has('safe');
+    this.contextLost = false;
+    // A lost WebGL context is the one thing that turns the canvas black mid-run.
+    // Keep the page alive, pause the game, and come back in simple graphics.
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      if (this.state === 'run') this.setState('paused');
+    });
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), 0.75));
+      this.resize();
+      this.setSafeMode(true, 'graphics were reset — switched to simple graphics');
+    });
     this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 160);
 
     this.sfx = new Sfx();
@@ -61,6 +77,11 @@ export class Game {
     this.ui = new UI();
     this.ui.setTouch(this.input.touch);
     this.ui.setMuted(this.sfx.muted);
+    this.ui.setGfx(this.safe);
+    this.ui.el.btnGfx.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setSafeMode(!this.safe, this.safe ? 'rich graphics' : 'simple graphics');
+    });
     this.input.onFirstInteraction = () => this.sfx.ensure();
     this.ui.onCard = (i) => {
       if (this.state !== 'select') return;
@@ -110,17 +131,31 @@ export class Game {
     window.__catwalk = this;
   }
 
+  /**
+   * Every tier starts at a conservative render resolution and only steps up when
+   * frames are measured to be fast (see adaptResolution). Overloading the GPU
+   * costs far more than a few pixels: a lost WebGL context is a black screen.
+   */
   detectQuality() {
     const touch = this.input.touch;
     const small = Math.min(screen.width, screen.height) <= 600; // phones; tablets get the medium tier
     const dpr = window.devicePixelRatio || 1;
     if (touch && small) {
-      return { tier: 'low', pixelRatio: Math.min(dpr, 1.25), msaa: 2, bloomScale: 0.5, waterRes: 256, particles: 0.6, lights: 6, shadow: 1024 };
+      return { tier: 'low', pixelRatio: Math.min(dpr, 1.0), maxPixelRatio: Math.min(dpr, 1.25), msaa: 2, bloomScale: 0.5, waterRes: 256, particles: 0.6, lights: 6, shadow: 1024 };
     }
     if (touch) {
-      return { tier: 'medium', pixelRatio: Math.min(dpr, 1.5), msaa: 4, bloomScale: 0.75, waterRes: 384, particles: 0.8, lights: 8, shadow: 1024 };
+      return { tier: 'medium', pixelRatio: Math.min(dpr, 1.0), maxPixelRatio: Math.min(dpr, 1.5), msaa: 2, bloomScale: 0.5, waterRes: 384, particles: 0.8, lights: 6, shadow: 1024 };
     }
-    return { tier: 'high', pixelRatio: Math.min(dpr, 1.5), msaa: 4, bloomScale: 1, waterRes: 512, particles: 1, lights: 8, shadow: 1024 };
+    return { tier: 'high', pixelRatio: Math.min(dpr, 1.0), maxPixelRatio: Math.min(dpr, 1.5), msaa: 2, bloomScale: 0.5, waterRes: 512, particles: 1, lights: 6, shadow: 1024 };
+  }
+
+  /** Simple graphics: no post-processing, no multisampled HDR buffer. */
+  setSafeMode(on, reason) {
+    this.safe = on;
+    this.save.safe = on;
+    storeSave(this.save);
+    this.ui.setGfx(on);
+    if (reason) this.ui.toast(reason, 2600);
   }
 
   resize() {
@@ -619,18 +654,28 @@ export class Game {
     requestAnimationFrame(loop);
   }
 
-  /** Drop render resolution if the device cannot keep up. */
+  /**
+   * Resolution follows measured frame time: step down quickly when the device
+   * cannot keep up, step up slowly (and only as far as the tier allows) when
+   * frames are comfortably fast. Changes are rate-limited so they never flicker.
+   */
   adaptResolution(dt) {
     this.frameTimes.push(dt);
     this.frameClock += dt;
-    if (this.frameClock < 3) return;
+    if (this.frameClock < 2.5) return;
     const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
     this.frameTimes = [];
     this.frameClock = 0;
+    this.adaptCooldown = Math.max(0, (this.adaptCooldown || 0) - 2.5);
+    if (this.adaptCooldown > 0) return;
     const pr = this.renderer.getPixelRatio();
-    if (avg > 0.024 && pr > 0.75) {
-      this.renderer.setPixelRatio(Math.max(0.75, pr - 0.25));
+    let next = pr;
+    if (avg > 0.022 && pr > 0.75) next = Math.max(0.75, pr - 0.25);
+    else if (avg < 0.009 && pr < this.quality.maxPixelRatio) next = Math.min(this.quality.maxPixelRatio, pr + 0.25);
+    if (next !== pr) {
+      this.renderer.setPixelRatio(next);
       this.resize();
+      this.adaptCooldown = 8;
     }
   }
 
@@ -642,6 +687,7 @@ export class Game {
     if (this.state === 'run') this.adaptResolution(dt);
 
     if (input.consume('mute')) this.toggleMute();
+    if (input.consume('gfx')) this.setSafeMode(!this.safe, this.safe ? 'rich graphics' : 'simple graphics');
 
     // --- flow ---------------------------------------------------------------
     switch (this.state) {
@@ -768,7 +814,7 @@ export class Game {
 
     this.updateCamera(dt);
     this.world.update(this.state === 'paused' ? 0 : sdt, p.x, p.y, this.camera.position.x);
-    this.world.render();
+    if (!this.contextLost) this.world.render(this.safe);
   }
 
   updateCamera(dt) {

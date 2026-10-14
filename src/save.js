@@ -8,12 +8,12 @@ export function loadSave() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = JSON.parse(raw);
-      if (data && typeof data === 'object') return { records: {}, muted: false, ...data };
+      if (data && typeof data === 'object') return { records: {}, muted: false, safe: false, ...data };
     }
   } catch {
     /* private mode / blocked storage — play without records */
   }
-  return { records: {}, muted: false };
+  return { records: {}, muted: false, safe: false };
 }
 
 export function storeSave(data) {

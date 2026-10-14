@@ -27,6 +27,7 @@ from any sub-path, e.g. GitHub Pages). `npm run preview` serves that build.
 | `P` / `Esc`                                      | pause                                         |
 | `R`                                              | restart the stage                             |
 | `M` / the corner button                          | mute / unmute                                 |
+| `G` / the corner button                          | simple graphics (no post-processing) — use it if the screen ever goes black |
 
 Jump buffering (press slightly before landing) and coyote time (press slightly after
 running off an edge) are built in, and a landing that just barely misses a ledge still

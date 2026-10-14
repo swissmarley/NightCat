@@ -15,6 +15,7 @@ export class Input {
       pause: false,
       restart: false,
       mute: false,
+      gfx: false,
       left: false,
       right: false,
     };
@@ -43,6 +44,8 @@ export class Input {
         this._edges.restart = true;
       } else if (e.code === 'KeyM') {
         this._edges.mute = true;
+      } else if (e.code === 'KeyG') {
+        this._edges.gfx = true;
       } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
         this._edges.left = true;
       } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {

@@ -41,6 +41,7 @@ export class UI {
       corner: $('corner'),
       btnSound: $('btn-sound'),
       btnFull: $('btn-full'),
+      btnGfx: $('btn-gfx'),
     };
     this.screens = ['title', 'select', 'gameover', 'clear', 'pause'];
     this.onCard = null;
@@ -195,5 +196,8 @@ export class UI {
   setMuted(m) {
     this.el.corner.classList.toggle('muted', m);
     this.el.btnSound.textContent = m ? 'sound off' : 'sound on';
+  }
+  setGfx(safe) {
+    this.el.btnGfx.textContent = safe ? 'graphics: simple' : 'graphics: rich';
   }
 }

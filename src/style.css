@@ -460,6 +460,9 @@ body.touch #touchzones {
 #corner.muted #btn-sound {
   color: rgba(233, 228, 216, 0.2);
 }
+#corner {
+  flex-wrap: wrap;
+}
 button.touch-only {
   display: none;
 }

@@ -281,8 +281,12 @@ export class World {
     this.bloom.setSize(w * bs, h * bs);
   }
 
-  render() {
-    this.composer.render();
+  /** safe: draw straight to the screen with no post-processing. */
+  render(safe = false) {
+    if (safe) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, this.camera);
+    } else this.composer.render();
   }
 
   // --- per-frame -----------------------------------------------------------------------------
