@@ -1,4 +1,4 @@
-// Tiny WebAudio synth: ambience beds (rain / mountain night / snow) and one-shot sounds. No samples.
+// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour) and one-shot sounds. No samples.
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -38,7 +38,7 @@ export class Sfx {
     return buf;
   }
 
-  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II) or 'snow' (stage III). */
+  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III) or 'harbour' (stage IV). */
   setAmbience(kind) {
     this.wantAmbience = kind;
     if (!this.ctx || kind === this.ambKind) return;
@@ -53,15 +53,16 @@ export class Sfx {
 
     // pad: slow detuned oscillators under a low-pass, breathing gently
     const padGain = ctx.createGain();
-    padGain.gain.value = kind === 'rain' ? 0.045 : 0.035;
+    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' ? 0.03 : 0.035;
     const padLp = ctx.createBiquadFilter();
     padLp.type = 'lowpass';
-    padLp.frequency.value = kind === 'rain' ? 260 : kind === 'snow' ? 380 : 320;
+    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420 }[kind];
     padLp.connect(padGain).connect(out);
     const chord = {
       rain: [55, 82.6, 110.4],
       night: [49, 73.6, 98.2, 147.1],
       snow: [43.65, 65.4, 87.3, 130.8, 164.8],
+      harbour: [55, 82.4, 110, 138.6, 164.8],
     }[kind];
     for (const f of chord) {
       const o = ctx.createOscillator();
@@ -136,6 +137,43 @@ export class Sfx {
         this.ambTimer = setTimeout(toll, 9000 + Math.random() * 9000);
       };
       this.ambTimer = setTimeout(toll, 2500);
+    } else if (kind === 'harbour') {
+      // the sea against the quays: a low wash that swells and draws back, a softer lapping over it
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 460;
+      const g = ctx.createGain();
+      g.gain.value = 0.04;
+      const swell = ctx.createOscillator();
+      swell.frequency.value = 0.11;
+      const swellGain = ctx.createGain();
+      swellGain.gain.value = 0.026;
+      swell.connect(swellGain).connect(g.gain);
+      swell.start();
+      noise.connect(lp).connect(g).connect(out);
+      const lap = ctx.createBiquadFilter();
+      lap.type = 'bandpass';
+      lap.frequency.value = 1100;
+      lap.Q.value = 0.6;
+      const lg = ctx.createGain();
+      lg.gain.value = 0.012;
+      const lapLfo = ctx.createOscillator();
+      lapLfo.frequency.value = 0.37;
+      const lapDepth = ctx.createGain();
+      lapDepth.gain.value = 0.01;
+      lapLfo.connect(lapDepth).connect(lg.gain);
+      lapLfo.start();
+      noise.connect(lap).connect(lg).connect(out);
+      nodes.push(swell, lapLfo);
+      // halyards tapping on the masts of the moored boats
+      const tink = () => {
+        if (this.ambKind !== 'harbour') return;
+        const f = 1700 + Math.random() * 900;
+        this._tone(f, { dur: 0.3, vol: 0.005 + Math.random() * 0.006 });
+        if (Math.random() < 0.4) this._tone(f * 1.5, { dur: 0.2, vol: 0.004, delay: 0.09 });
+        this.ambTimer = setTimeout(tink, 500 + Math.random() * 2300);
+      };
+      this.ambTimer = setTimeout(tink, 1200);
     } else {
       // wind through trees: low noise with a slow swell
       const lp = ctx.createBiquadFilter();
@@ -255,10 +293,10 @@ export class Sfx {
     }
   }
 
-  _noise(dur, { freq = 400, q = 1, vol = 0.3, type = 'bandpass' } = {}) {
+  _noise(dur, { freq = 400, q = 1, vol = 0.3, type = 'bandpass', delay = 0 } = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + delay;
     const len = Math.floor(ctx.sampleRate * dur);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
@@ -325,6 +363,19 @@ export class Sfx {
   /** A bell brushed in passing. */
   chime() {
     this._bell(523, { vol: 0.07, dur: 2.2 });
+  }
+  /** A rocket climbing over the bay. */
+  whistle(dur = 1) {
+    this._tone(620 + Math.random() * 200, { dur, vol: 0.008, slide: 700 + Math.random() * 400, attack: 0.15 });
+  }
+  /** A shell bursting out over the water: the boom arrives a moment after the flash; some crackle as they fall. */
+  firework({ delay = 0.4, size = 1, crackle = false } = {}) {
+    this._noise(1.1, { freq: 200, q: 0.5, vol: 0.12 * size, type: 'lowpass', delay });
+    this._tone(62, { type: 'sine', dur: 0.55, vol: 0.08 * size, slide: -22, delay });
+    if (!crackle) return;
+    for (let i = 0; i < 24; i++) {
+      this._noise(0.03, { freq: 3200 + Math.random() * 1800, q: 1.2, vol: 0.02 + Math.random() * 0.02, delay: delay + 0.55 + Math.random() * 0.9 });
+    }
   }
   clear() {
     const notes = [523, 659, 784, 1046, 1318];

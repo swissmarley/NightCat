@@ -11,10 +11,11 @@ import { STAGES, stageById } from './stages.js';
 import { streetTheme } from './themes/street.js';
 import { shrineTheme } from './themes/shrine.js';
 import { snowTheme } from './themes/snow.js';
+import { harbourTheme } from './themes/harbour.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
@@ -211,6 +212,7 @@ export class Game {
     this.tex = { ...this.sharedTex, ...this.theme.makeTextures(rng) };
     this.level = buildLevel(this.scene, stage, this.theme, this.tex, rng);
     this.world = new World(this.scene, this.renderer, this.camera, this.level, this.theme, this.tex, rng, this.quality);
+    this.world.sfx = this.sfx; // scenery that makes its own sounds (stage IV's fireworks) plays through it
     this.scene.add(this.cat.group);
     this.sfx.setAmbience(this.theme.ambience);
     this.ui.setTicks(this.level.checkpoints.map((cp) => cp.x / this.level.goalX));

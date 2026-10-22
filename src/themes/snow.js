@@ -31,7 +31,7 @@ const BULBS = [0xffb45a, 0xffd38a, 0xff6a4a, 0xfff0c8];
 const ATLAS = { cols: 48, rows: 24 };
 
 /** Collects quads into one BufferGeometry so a whole row of houses is a single draw call. */
-class Mesher {
+export class Mesher {
   constructor() {
     this.pos = [];
     this.nor = [];

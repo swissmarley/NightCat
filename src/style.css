@@ -331,8 +331,8 @@ kbd {
   flex-wrap: wrap;
 }
 .card {
-  width: min(280px, 29vw);
-  min-width: 170px;
+  width: min(250px, 21vw);
+  min-width: 150px;
   padding: 20px 18px 16px;
   border: 1px solid rgba(233, 228, 216, 0.18);
   background: rgba(6, 7, 15, 0.45);
@@ -504,9 +504,10 @@ body.touch button.touch-only {
   .cards {
     gap: 10px;
   }
+  /* two by two */
   .card {
-    width: 44vw;
-    min-width: 150px;
+    width: calc(50% - 5px);
+    min-width: 0;
     padding: 14px 12px 12px;
   }
 }
