@@ -2,8 +2,8 @@
 //
 // plat(len, top, obstacles) / gap(len) / boards(len, top). Obstacle x is
 // relative to the platform start. Kinds are theme-specific; 'cp' is a checkpoint
-// marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell) are slid
-// under or jumped; stage I has none. Boards are a platform that gives way
+// marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell, fishline,
+// lanterns) are slid under or jumped; stage I has none. Boards are a platform that gives way
 // BRITTLE_DELAY seconds after it is first stood on: jump off them in time.
 //
 // Authoring rules of thumb (full jump carries ≈5.5u at 7u/s, ≈7.2u at 9.4u/s):
@@ -266,6 +266,101 @@ export const STAGES = [
         ]); // gap + step down: a long landing
         gap(4.4);
         plat(30, 0, [{ x: 7.5, kind: 'garland' }]); // home stretch; home sits 14u in
+      }),
+  },
+  {
+    id: 4,
+    numeral: 'IV',
+    name: 'the harbour lights',
+    blurb: 'fish, boats, and fireworks over the bay',
+    theme: 'harbour',
+    seed: 40817,
+    baseSpeed: 8.2,
+    speedGain: 2.4,
+    goalOffset: 14,
+    extraSparks: [
+      { x: 9, y: 0.6 },
+      { x: 10.4, y: 0.6 },
+      { x: 11.8, y: 0.6 },
+      { x: 16.0, y: 0.3 },
+      // an arc over the first shed roof, for a held jump taken about 170
+      { x: 172.3, y: 3.92 },
+      { x: 173.4, y: 4.18 },
+      { x: 174.6, y: 3.94 },
+    ],
+    // A short platform with water on both sides is dressed as a moored boat, and
+    // one 1.5u or more up as the roof of a fish shed; the rest are stone quays.
+    layout: () =>
+      make((plat, gap, boards) => {
+        plat(22, 0); // the fish quay: nothing but the walk, a harbour cat and the sparks
+        gap(2.4);
+        plat(13, 0, [{ x: 5.6, kind: 'crate' }]);
+        gap(2.8);
+        plat(6.5, -0.2); // the first boats: hop, hop
+        gap(2.4);
+        plat(6.5, 0.3);
+        gap(2.8);
+        plat(16, 0, [{ x: 7.5, kind: 'fishline' }]); // fish hung out to dry: slide under
+        plat(15, 0.8, [{ x: 8.4, kind: 'barrel' }]); // wall
+        gap(3.4);
+        plat(7, 0.5); // a trawler
+        gap(3.2);
+        plat(17, 0.4, [
+          { x: 5.8, kind: 'nets' },
+          { x: 10, kind: 'cp' },
+        ]);
+        gap(3.2); // the old jetty: planks between the boats that give way
+        plat(7, 0.4);
+        gap(2.0);
+        boards(6, 0.4);
+        gap(1.8);
+        plat(6.5, 0.4);
+        gap(2.2);
+        plat(16, 0.4, [{ x: 6.6, kind: 'bollard' }]);
+        plat(10, 1.6); // wall: up onto the fish sheds
+        plat(16, 1.6, [{ x: 7, kind: 'creel' }]);
+        gap(3.6);
+        plat(13, 1.0, [{ x: 9.5, kind: 'lanterns' }]); // gap + step down
+        plat(15, 0.2, [{ x: 7.4, kind: 'crate' }]); // step down
+        gap(4.0);
+        plat(7, 0.6); // boats again
+        gap(3.0);
+        plat(7.5, 1.0); // a big trawler
+        gap(3.4);
+        plat(18, 0.5, [
+          { x: 7.5, kind: 'fishline' },
+          { x: 13, kind: 'cp' },
+        ]);
+        gap(1.8); // stepping planks: hop, hop, hop
+        boards(6, 0.5);
+        gap(1.8);
+        boards(6, 0.5);
+        gap(2.0);
+        plat(17, 0.5, [{ x: 11, kind: 'lanterns' }]);
+        plat(4.5, 1.0); // up the steps: hop, hop, hop
+        plat(4.5, 1.5);
+        plat(18, 2.0, [{ x: 10.5, kind: 'barrel' }]); // the high shed
+        gap(3.6);
+        plat(15, 1.2, [{ x: 6.5, kind: 'nets' }]); // gap + step down
+        plat(17, 0.3, [
+          { x: 7.4, kind: 'creel' },
+          { x: 9.6, kind: 'bollard' },
+        ]); // step down; one jump clears both
+        gap(4.2);
+        plat(6.5, 0); // boats, wider apart
+        gap(2.8);
+        plat(6.5, 0.6);
+        gap(2.8);
+        plat(20, 0.4, [
+          { x: 6, kind: 'cp' },
+          { x: 12.5, kind: 'fishline' },
+        ]);
+        plat(19, 1.0, [{ x: 9.5, kind: 'crate' }]); // wall
+        boards(6, 1.0); // planks, then a gap: leave them early
+        gap(1.6);
+        plat(20, 0.6, [{ x: 11.5, kind: 'lanterns' }]);
+        gap(4.4);
+        plat(30, 0, [{ x: 9, kind: 'lanterns' }]); // home stretch; home sits 14u in
       }),
   },
 ];

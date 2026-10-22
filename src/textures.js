@@ -468,9 +468,10 @@ export function windowPaneTexture(lit) {
 /**
  * A big sheet of façade cells for the houses behind the walk: each cell is a
  * window on a neutral wall (tinted by vertex colour). Returns the colour map
- * and an emissive map in which only the lit windows show.
+ * and an emissive map in which only the lit windows show. sill: the colour of
+ * the snow lying on the sills, or null for none.
  */
-export function townWindowsTexture(rng, cols, rows, litProb = 0.3) {
+export function townWindowsTexture(rng, cols, rows, litProb = 0.3, sill = '#e8eef6') {
   const cw = 16;
   const ch = 18;
   const a = canvas(cols * cw, rows * ch);
@@ -503,9 +504,11 @@ export function townWindowsTexture(rng, cols, rows, litProb = 0.3) {
         g.fillStyle = `rgba(30, 40, 60, ${0.6 + rng() * 0.4})`;
         g.fillRect(px, py, cw - 10, ch - 9);
       }
-      // snow on the sill
-      g.fillStyle = '#e8eef6';
-      g.fillRect(px - 2, py + ch - 9, cw - 6, 2);
+      // snow on the sill (none in summer)
+      if (sill) {
+        g.fillStyle = sill;
+        g.fillRect(px - 2, py + ch - 9, cw - 6, 2);
+      }
     }
   }
   const map = finish(a, { repeat: false });
@@ -590,4 +593,93 @@ export function roofTileTexture(rng) {
   }
   addNoise(g, W, W, 14, rng);
   return finish(c);
+}
+
+/** Granite blocks laid in courses, weathered and salt-stained (harbour quays). 1 tile ≈ 2u. */
+export function quayStoneTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#141519';
+  g.fillRect(0, 0, W, W);
+  const rows = 4;
+  const rh = W / rows;
+  for (let r = 0; r < rows; r++) {
+    const start = rng() * 60;
+    let x = start;
+    while (x < start + W) {
+      const end = Math.min(x + 50 + rng() * 70, start + W);
+      const l = 24 + rng() * 14;
+      const fill = `hsl(${205 + rng() * 25}, ${5 + rng() * 6}%, ${l}%)`;
+      const edge = `hsla(40, 12%, ${l + 12}%, 0.4)`;
+      // drawn twice, a tile apart, so the courses wrap around
+      for (const off of [0, -W]) {
+        g.fillStyle = fill;
+        g.fillRect(x + off + 2, r * rh + 2, end - x - 4, rh - 4);
+        g.fillStyle = edge;
+        g.fillRect(x + off + 2, r * rh + 2, end - x - 4, 2);
+      }
+      x = end;
+    }
+  }
+  // salt and lichen
+  for (let i = 0; i < 80; i++) {
+    const l = 190 + rng() * 50;
+    g.fillStyle = `rgba(${l}, ${l}, ${l - 15}, ${0.03 + rng() * 0.08})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 3 + rng() * 16, 2 + rng() * 8, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  addNoise(g, W, W, 18, rng);
+  return finish(c);
+}
+
+/** Weathered vertical boards with battens over the joints, near-white so paint can tint them. 1 tile ≈ 2u. */
+export function boardTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#bdb8b0';
+  g.fillRect(0, 0, W, W);
+  const n = 8;
+  const bw = W / n;
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = `hsl(35, 6%, ${70 + rng() * 14}%)`;
+    g.fillRect(i * bw + 1, 0, bw - 2, W);
+    for (let k = 0; k < 10; k++) {
+      g.fillStyle = `rgba(60, 50, 40, ${0.05 + rng() * 0.1})`;
+      g.fillRect(i * bw + 2 + rng() * (bw - 4), 0, 1, W);
+    }
+  }
+  for (let i = 0; i <= n; i++) {
+    g.fillStyle = 'rgba(40, 34, 28, 0.4)';
+    g.fillRect(i * bw - 3, 0, 6, W);
+    g.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    g.fillRect(i * bw - 3, 0, 2, W);
+  }
+  // where the paint has worn away
+  for (let i = 0; i < 40; i++) {
+    g.fillStyle = `rgba(60, 48, 36, ${0.05 + rng() * 0.12})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 4 + rng() * 18, 2 + rng() * 10, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  addNoise(g, W, W, 14, rng);
+  return finish(c);
+}
+
+/** A lighthouse beam: white, brightest at the lamp (v = 1) and fading out along its length. */
+export function beamTexture() {
+  const W = 4;
+  const H = 128;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(0.6, 'rgba(255,255,255,0.12)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  return finish(c, { repeat: false, anisotropy: 1 });
 }
