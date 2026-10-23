@@ -2,8 +2,8 @@
 
 A moody 3D side-scrolling auto-runner. A cat runs through the night — along the walls of a
 rain-slicked street, over a lake to a mountain shrine, across the snowy roofs of a hill town,
-then over the boats of a fishing harbour on a festival night — and the screen never stops.
-Two verbs: jump and slide.
+over the boats of a fishing harbour on a festival night, then through a botanical garden in
+spring — and the screen never stops. Two verbs: jump and slide.
 
 Built with [three.js](https://threejs.org) and [Vite](https://vite.dev). No art assets —
 the cat, the stages, the textures and the sound are all generated in code. Plays on
@@ -33,8 +33,8 @@ from any sub-path, e.g. GitHub Pages). `npm run preview` serves that build.
 Jump buffering (press slightly before landing) and coyote time (press slightly after
 running off an edge) are built in, and a landing that just barely misses a ledge still
 counts. A cat always finds the ledge. Hanging things (washing lines, signs, ropes, low
-branches, garlands, bells, drying fish, paper lanterns) only block what you can see: slide
-under them, or clear them with a high jump. Old boards laid across an alley hold for a moment
+branches, garlands, bells, drying fish, paper lanterns, wisteria, hanging baskets, wind
+chimes) only block what you can see: slide under them, or clear them with a high jump. Old boards laid across an alley hold for a moment
 after you land on them, then give way: jump off them in time.
 
 ### The stages
@@ -54,8 +54,16 @@ after you land on them, then give way: jump off them in time.
   highest. Fish boxes, herring barrels, lobster pots, bollards and heaps of net to jump; fish
   hung out to dry and strings of paper lanterns to slide under; old jetty planks that give
   way. Harbour cats watch from the quays and the boats, fireworks burst over the bay, a
-  lighthouse sweeps the water, and a friend waits at home with a bowl of fish. The fastest
-  night yet, three lanterns.
+  lighthouse sweeps the water, and a friend waits at home with a bowl of fish. Three
+  lanterns.
+- **V · the glass garden** — a botanical garden on a spring night: brick terrace walls,
+  clipped hedges to hop across, and the glass ridges of glowing glasshouses, up a terrace of
+  them to the tallest. Watering cans, stacks of flowerpots, wheelbarrows, a gnome, bird baths
+  and roof vents to jump; wisteria, hanging baskets and wind chimes (they ring as you pass)
+  to slide under; old plank bridges over the beds that give way. Behind it, a lily pond full
+  of moon with frogs that plop into the water as you run by, blossom petals drifting, and a
+  palm house glowing across the water. Cats nap in flowerpots and on the hedges, a kitten
+  bats at a moth, and at home a family waits. The fastest and longest night, three lanterns.
 
 Each stage has lanterns that act as **checkpoints** — stumble, and you can continue from
 the last lantern. Collect the floating **sparks** on the way. Clearing a stage gives a rank
@@ -81,14 +89,21 @@ src/
   themes/harbour.js stage IV dressing: stone quays, procedural boat hulls, fish sheds,
                    jetty planks, the harbour cats, the town across the bay, moored boats,
                    floating lanterns, a lighthouse, fireworks, obstacles
+  themes/garden.js stage V dressing: terrace walls, clipped hedges, glasshouses (glass over a
+                   painted, glowing interior), plank bridges, the lily pond and its frogs
+                   (only what lies behind it is drawn into its mirror), blossom trees and
+                   petals, the palm house, glow-worms, moths, obstacles
+  themes/cats.js   the cats in the scenery of stages IV and V
   cat.js           procedural cat (primitives) + procedural animation
   textures.js      canvas-generated textures (brick, moss stone, bark, asphalt, windows,
                    water normals, glow, mist, leaf, snow, plaster, roof tiles, aurora,
-                   quay granite, painted boards, lighthouse beam)
+                   quay granite, painted boards, lighthouse beam, hedge, lawn, gravel,
+                   blossom petal, a glasshouse's palms-and-lamplight interior)
   input.js         keyboard + pointer/touch input
   audio.js         WebAudio synth: rain, mountain-night, winter-wind (with a distant church
-                   bell) or harbour ambience (water against the quays, rigging on the masts),
-                   fireworks, one-shot effects
+                   bell), harbour (water against the quays, rigging on the masts) or garden
+                   ambience (a breeze, frogs, now and then a nightingale), fireworks, wind
+                   chimes, one-shot effects
   ui.js            DOM overlays (title, stage select, HUD, pause, game over, stage clear)
   save.js          localStorage records
 ```
@@ -102,10 +117,13 @@ src/
   aurora behind the mountains, and lanterns in the alleys light the snow the cat jumps over.
   Stage IV sets fireworks over the bay — shells aimed into the camera's view that burst,
   flash, light the harbour for a moment and boom a little later, doubled in the water —
-  and a lighthouse beam sweeping round.
-- **Harbour cats.** Simpler cats than the hero, built from a handful of primitives: sitting
-  ones turn their heads to watch the night cat go by (and otherwise the fireworks) and flick
-  their tails; sleeping ones breathe.
+  and a lighthouse beam sweeping round. Stage V's glasshouses are glass over a painted
+  interior of palms and lamplight that glows from within, and the palm house across the
+  lily pond is doubled in the water.
+- **Scenery cats.** Simpler cats than the hero, built from a handful of primitives, sitting,
+  asleep or peeking out of a flowerpot: awake ones turn their heads to watch the night cat go
+  by (and otherwise the view) and flick their tails, a kitten bats at a moth, sleeping ones
+  breathe.
 - **Cat animation.** Fully procedural: a rotary-gallop run cycle, stretch/reach poses in the
   air blended by vertical velocity, a dive pose, a belly-down slide, landing squash and
   takeoff stretch, idle breathing and looking around, a sitting pose for the ending, a tail

@@ -683,3 +683,154 @@ export function beamTexture() {
   g.fillRect(0, 0, W, H);
   return finish(c, { repeat: false, anisotropy: 1 });
 }
+
+/** A clipped hedge: dense small leaves in a dozen greens. Tiles both ways. 1 tile ≈ 1.2u. */
+export function hedgeTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#10200f';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 900; i++) {
+    const x = rng() * W;
+    const y = rng() * W;
+    const r = 1.5 + rng() * 3;
+    const turn = rng() * Math.PI;
+    g.fillStyle = `hsl(${95 + rng() * 40}, ${30 + rng() * 25}%, ${10 + rng() * 22}%)`;
+    // drawn again a tile over where it crosses an edge, so the leaves wrap
+    for (const ox of [0, -W, W]) {
+      for (const oy of [0, -W, W]) {
+        if (x + ox < -r || x + ox > W + r || y + oy < -r || y + oy > W + r) continue;
+        g.beginPath();
+        g.ellipse(x + ox, y + oy, r, r * 0.6, turn, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  addNoise(g, W, W, 10, rng);
+  return finish(c);
+}
+
+/** Mown grass over dark earth, for the lawns and beds. 1 tile ≈ 2u. */
+export function lawnTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#16240f';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 1400; i++) {
+    g.fillStyle = `hsla(${85 + rng() * 40}, ${25 + rng() * 30}%, ${8 + rng() * 18}%, 0.8)`;
+    g.fillRect(rng() * W, rng() * W, 1, 2 + rng() * 3);
+  }
+  addNoise(g, W, W, 12, rng);
+  return finish(c);
+}
+
+/** Pale raked gravel for the paths. 1 tile ≈ 2u. */
+export function gravelTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#6e665a';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 1200; i++) {
+    const l = 30 + rng() * 45;
+    g.fillStyle = `hsl(${30 + rng() * 20}, ${6 + rng() * 10}%, ${l}%)`;
+    g.fillRect(rng() * W, rng() * W, 1 + rng() * 2, 1 + rng() * 2);
+  }
+  addNoise(g, W, W, 14, rng);
+  return finish(c);
+}
+
+/** One blossom petal (white, alpha), tinted per instance. */
+export function petalTexture() {
+  const W = 64;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, W);
+  const grad = g.createRadialGradient(W / 2, W * 0.62, 2, W / 2, W / 2, W / 2);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(1, '#e8e0e8');
+  g.fillStyle = grad;
+  g.beginPath();
+  g.moveTo(W / 2, W - 6);
+  g.bezierCurveTo(6, W * 0.6, 10, 8, W / 2 - 4, 6);
+  g.quadraticCurveTo(W / 2, 14, W / 2 + 4, 6);
+  g.bezierCurveTo(W - 10, 8, W - 6, W * 0.6, W / 2, W - 6);
+  g.fill();
+  return finish(c, { repeat: false });
+}
+
+/**
+ * The inside of a glasshouse as seen through its glass: lamplight low down, green
+ * shade above, and the dark shapes of palms, ferns and leaves in front. Meant as
+ * an emissive map on a plane at the back. Tiles across.
+ */
+export function conservatoryTexture(rng) {
+  const W = 512;
+  const H = 256;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#0e2a22');
+  sky.addColorStop(0.55, '#3c5a2c');
+  sky.addColorStop(0.85, '#c88a3a');
+  sky.addColorStop(1, '#f0b860');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, W, H);
+  // lamps among the plants
+  for (let i = 0; i < 6; i++) {
+    const x = ((i + rng() * 0.6) / 6) * W;
+    const y = H * (0.45 + rng() * 0.25);
+    const lamp = g.createRadialGradient(x, y, 0, x, y, 60);
+    lamp.addColorStop(0, 'rgba(255, 214, 140, 0.8)');
+    lamp.addColorStop(1, 'rgba(255, 214, 140, 0)');
+    g.fillStyle = lamp;
+    g.fillRect(x - 60, y - 60, 120, 120);
+  }
+  // silhouettes: palms with arching fronds, broad leaves below; each is drawn
+  // three times, a tile apart, so the picture wraps
+  const leafy = (x, y, draw) => {
+    for (const ox of [0, -W, W]) {
+      g.save();
+      g.translate(x + ox, y);
+      draw();
+      g.restore();
+    }
+  };
+  g.fillStyle = 'rgba(6, 16, 10, 0.92)';
+  g.strokeStyle = 'rgba(6, 16, 10, 0.92)';
+  for (let i = 0; i < 9; i++) {
+    const x = rng() * W;
+    const crown = H * (0.6 + rng() * 0.3);
+    const fronds = Array.from({ length: 7 }, (_, f) => [-Math.PI / 2 + (f / 6 - 0.5) * 2.6, 40 + rng() * 40]);
+    leafy(x, H, () => {
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.quadraticCurveTo(8, -crown / 2, 0, -crown);
+      g.stroke();
+      g.lineWidth = 6;
+      for (const [a, len] of fronds) {
+        g.beginPath();
+        g.moveTo(0, -crown);
+        g.quadraticCurveTo(Math.cos(a) * len * 0.6, -crown + Math.sin(a) * len * 0.6 - 18, Math.cos(a) * len, -crown + Math.sin(a) * len + 10);
+        g.stroke();
+      }
+    });
+  }
+  for (let i = 0; i < 40; i++) {
+    const x = rng() * W;
+    const y = H * (0.7 + rng() * 0.3);
+    const turn = (rng() - 0.5) * 1.6;
+    const rx = 8 + rng() * 14;
+    const ry = 3 + rng() * 6;
+    leafy(x, y, () => {
+      g.rotate(turn);
+      g.beginPath();
+      g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      g.fill();
+    });
+  }
+  return finish(c, { anisotropy: 1 });
+}
