@@ -3,7 +3,8 @@
 // plat(len, top, obstacles) / gap(len) / boards(len, top). Obstacle x is
 // relative to the platform start. Kinds are theme-specific; 'cp' is a checkpoint
 // marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell, fishline,
-// lanterns, wisteria, basket, chimes) are slid under or jumped; stage I has none.
+// lanterns, wisteria, basket, chimes, carpet, fanous, peppers, bunting, trapeze,
+// bulbs) are slid under or jumped; stage I has none.
 // Boards are a platform that gives way BRITTLE_DELAY seconds after it is first
 // stood on: jump off them in time. An awning(len, top) is a stretched canvas that
 // throws the cat up (BOUNCE_V) the moment it lands on it: from anywhere on it the
@@ -564,6 +565,114 @@ export const STAGES = [
         plat(24, 1.4, [{ x: 13.5, kind: 'cage' }]);
         gap(4.2);
         plat(30, 0, [{ x: 9, kind: 'fanous' }]); // home stretch; home sits 14u in
+      }),
+  },
+  {
+    id: 7,
+    numeral: 'VII',
+    name: 'the night train',
+    blurb: 'a circus train, a full moon, and the country rushing by',
+    theme: 'train',
+    seed: 70719,
+    baseSpeed: 9.0,
+    speedGain: 2.4,
+    goalOffset: 14,
+    extraSparks: [
+      { x: 9, y: 0.6 },
+      { x: 10.4, y: 0.6 },
+      { x: 11.8, y: 0.6 },
+      { x: 16.0, y: 0.3 },
+    ],
+    // Platforms that touch are one car of the train; the gaps are the couplings.
+    // A lone short platform is a little wheeled wagon riding on a flatcar, a tall
+    // one the elephant car; old boards are planks over an open wagon, and the
+    // trampolines (awnings, to the engine) stand on flatcars.
+    layout: () =>
+      make((plat, gap, boards, tramp) => {
+        plat(24, 0); // the first coach: nothing but the walk, a cat on a tub and the sparks
+        gap(2.6);
+        plat(13, 0, [{ x: 5.8, kind: 'pedestal' }]); // low enough for a quick hop
+        gap(2.8);
+        plat(5.5, 0.3); // little wagons on flatcars: hop, hop, hop
+        gap(2.4);
+        plat(5.5, -0.1);
+        gap(2.4);
+        plat(5.5, 0.3);
+        gap(2.6);
+        plat(18, 0.2, [{ x: 9, kind: 'bunting' }]); // bunting strung over the roof: slide under
+        plat(18, 1.0, [{ x: 9.5, kind: 'trunk' }]); // wall
+        gap(2.2); // the first trampoline: drop onto it and it throws you up onto the elephant car
+        tramp(4.5, -0.4);
+        gap(2.3);
+        plat(21, 1.9, [{ x: 12, kind: 'drum' }]);
+        gap(3.6);
+        plat(15, 1.2, [{ x: 9, kind: 'bulbs' }]); // gap + down
+        plat(18, 0.4, [
+          { x: 7.4, kind: 'ball' },
+          { x: 13, kind: 'cp' },
+        ]); // step down
+        gap(3.0); // planks over an open wagon, between two little wagons
+        plat(5, 0.4);
+        gap(1.8);
+        boards(6, 0.4);
+        gap(1.8);
+        plat(5, 0.4);
+        gap(2.4);
+        plat(19, 0.6, [{ x: 8.5, kind: 'cannon' }]);
+        gap(2.4); // two trampolines: one to the other, then up
+        tramp(4.5, -0.6);
+        gap(4.2);
+        tramp(5.5, -0.6);
+        gap(2.2);
+        plat(22, 1.6, [{ x: 13, kind: 'trapeze' }]);
+        plat(16, 0.8, [{ x: 9.5, kind: 'pedestal' }]); // step down
+        gap(3.3);
+        plat(18, 0.5, [
+          { x: 7, kind: 'bunting' },
+          { x: 13.5, kind: 'cp' },
+        ]);
+        gap(1.8); // the open wagons again: hop, hop, hop
+        boards(6, 0.5);
+        gap(1.8);
+        boards(6, 0.5);
+        gap(2.0);
+        plat(18, 0.5, [{ x: 11, kind: 'bulbs' }]);
+        plat(4.5, 1.0); // up the steps: hop, hop, hop
+        plat(4.5, 1.5);
+        plat(19, 2.0, [{ x: 10.5, kind: 'drum' }]); // a tall car
+        gap(2.2); // down to a trampoline and back up onto the tallest
+        tramp(4.5, 0.2);
+        gap(2.6);
+        plat(21, 2.6, [{ x: 11, kind: 'cannon' }]);
+        gap(3.8);
+        plat(16, 1.6, [{ x: 9.5, kind: 'trapeze' }]); // gap + down
+        plat(17, 0.4, [
+          { x: 7.4, kind: 'pedestal' },
+          { x: 9.0, kind: 'trunk' },
+        ]); // step down; one jump clears both
+        gap(4.0);
+        plat(21, 0.4, [
+          { x: 6, kind: 'cp' },
+          { x: 13, kind: 'bulbs' },
+        ]);
+        plat(19, 1.0, [{ x: 9.5, kind: 'ball' }]); // wall
+        boards(6, 1.0); // planks, then a gap: leave them early
+        gap(1.6);
+        plat(18, 0.6, [{ x: 11.5, kind: 'trapeze' }]);
+        gap(2.4); // the last trampolines: one to the other
+        tramp(4.5, -0.4);
+        gap(4.6);
+        tramp(6.5, -0.4);
+        gap(2.4);
+        plat(24, 1.4, [{ x: 13.5, kind: 'trunk' }]);
+        gap(3.0);
+        plat(5.5, 0.4); // the last little wagons, long enough for a full jump at this speed
+        gap(2.6);
+        plat(6, 0.8);
+        gap(2.6);
+        plat(16, 0.4, [{ x: 7.5, kind: 'drum' }]);
+        gap(4.0);
+        plat(28, 0, [{ x: 9, kind: 'bunting' }]); // home: the family's coach; home sits 14u in
       }),
   },
 ];

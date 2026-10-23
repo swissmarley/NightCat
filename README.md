@@ -3,8 +3,8 @@
 A moody 3D side-scrolling auto-runner. A cat runs through the night — along the walls of a
 rain-slicked street, over a lake to a mountain shrine, across the snowy roofs of a hill town,
 over the boats of a fishing harbour on a festival night, through a botanical garden in
-spring, then over the blue roofs of a desert town — and the screen never stops. Two verbs:
-jump and slide.
+spring, over the blue roofs of a desert town, then along a circus train crossing the country
+by moonlight — and the screen never stops. Two verbs: jump and slide.
 
 Built with [three.js](https://threejs.org) and [Vite](https://vite.dev). No art assets —
 the cat, the stages, the textures and the sound are all generated in code. Plays on
@@ -35,10 +35,11 @@ Jump buffering (press slightly before landing) and coyote time (press slightly a
 running off an edge) are built in, and a landing that just barely misses a ledge still
 counts. A cat always finds the ledge. Hanging things (washing lines, signs, ropes, low
 branches, garlands, bells, drying fish, paper lanterns, wisteria, hanging baskets, wind
-chimes, rugs hung out to air, brass lanterns, strings of peppers) only block what you can
-see: slide under them, or clear them with a high jump. Old boards laid across an alley hold
-for a moment after you land on them, then give way: jump off them in time. The striped
-awnings of market stalls throw the cat high the moment it lands on them — no need to jump.
+chimes, rugs hung out to air, brass lanterns, strings of peppers, bunting, a trapeze, strings
+of bulbs) only block what you can see: slide under them, or clear them with a high jump. Old
+boards laid across an alley hold for a moment after you land on them, then give way: jump off
+them in time. The striped awnings of market stalls (and the circus train's trampolines) throw
+the cat high the moment it lands on them — no need to jump.
 
 ### The stages
 
@@ -76,7 +77,17 @@ awnings of market stalls throw the cat high the moment it lands on them — no n
   away to a palm grove and the dunes, a caravan crossing them with a lantern, a kasbah on the
   ridge, the Milky Way and a thin moon overhead, and now and then a shooting star. Doves
   doze on the parapets and take off as you run by, cats keep watch from the roofs, and at
-  home a family waits by a dish of sardines. The fastest and longest night, three lanterns.
+  home a family waits by a dish of sardines. Three lanterns.
+- **VII · the night train** — along the roofs of a circus train crossing the country under a
+  full moon: painted wagons strung with marquee bulbs, the elephant car (the elephant has its
+  trunk out of the window), the lion's cage, sleeping coaches, little wheeled wagons riding on
+  flatcars. Star tubs, steamer trunks, drums, striped balls and a clown's cannon to jump;
+  bunting, a trapeze and strings of bulbs to slide under; planks over open wagons that give
+  way; trampolines on the flatcars that throw you up onto the tall cars. The country rushes
+  by — telegraph poles, fields and haystacks, a farm, a windmill, a village on the hills — a
+  station and level crossings sweep past, two tunnels put the moon out, and the engine's smoke
+  streams back over the train. At the front, by the engine, a family waits on a blanket. The
+  fastest and longest night, three lanterns.
 
 Each stage has lanterns that act as **checkpoints** — stumble, and you can continue from
 the last lantern. Collect the floating **sparks** on the way. Clearing a stage gives a rank
@@ -111,20 +122,27 @@ src/
                    stalls under springy awnings, reed mats, the town down the hill (merged
                    into a few draw calls per row), palms, dunes, a kasbah, a caravan, the
                    Milky Way, shooting stars, doves, obstacles
-  themes/cats.js   the cats in the scenery of stages IV to VI
+  themes/train.js  stage VII dressing: circus cars (painted wagons, cage, elephant car, coaches,
+                   wagons on flatcars, open wagons, trampolines), wheels that turn, marquee
+                   bulbs, the country in strips that repeat and slide past, a station, level
+                   crossings and tunnels sweeping by, engine smoke and embers, the engine
+  themes/cats.js   the cats in the scenery of stages IV to VII
   cat.js           procedural cat (primitives) + procedural animation
   textures.js      canvas-generated textures (brick, moss stone, bark, asphalt, windows,
                    water normals, glow, mist, leaf, snow, plaster, roof tiles, aurora,
                    quay granite, painted boards, lighthouse beam, hedge, lawn, gravel,
                    blossom petal, a glasshouse's palms-and-lamplight interior, limewash,
                    striped awning canvas, rugs, pierced brass, sand, zellige, arched windows,
-                   a studded door, reed matting, the Milky Way)
+                   a studded door, reed matting, the Milky Way, circus wagon panels, spoked
+                   wheels, stars, fields, an enamel station sign)
   input.js         keyboard + pointer/touch input
   audio.js         WebAudio synth: rain, mountain-night, winter-wind (with a distant church
                    bell), harbour (water against the quays, rigging on the masts) or garden
                    ambience (a breeze, frogs, now and then a nightingale) or desert-town
-                   ambience (a warm wind, crickets, now and then an oud down in the town),
-                   fireworks, wind chimes, one-shot effects
+                   ambience (a warm wind, crickets, now and then an oud down in the town) or
+                   the night train (its rumble, louder in tunnels, wheels clacking over the
+                   rail joints, a whistle far ahead), fireworks, wind chimes, a crossing
+                   bell, one-shot effects
   ui.js            DOM overlays (title, stage select, HUD, pause, game over, stage clear)
   save.js          localStorage records
 ```
@@ -142,7 +160,10 @@ src/
   interior of palms and lamplight that glows from within, and the palm house across the
   lily pond is doubled in the water. Stage VI turns the moon to a thin crescent (with
   earthshine on the dark side), lays the Milky Way across the sky over the dunes and sends
-  shooting stars across it — a shower of them when the cat gets home.
+  shooting stars across it — a shower of them when the cat gets home. In stage VII the train
+  stands still and the country moves: the scenery is built in strips that repeat and slide
+  back at the train's speed (the far hills cheated slower, as if much further off), and a
+  tunnel dims the moon, the sky and the fog as it passes over.
 - **Scenery cats.** Simpler cats than the hero, built from a handful of primitives, sitting,
   asleep or peeking out of a flowerpot or a water jar: awake ones turn their heads to watch
   the night cat go by (and otherwise the view) and flick their tails, a kitten bats at a
@@ -156,7 +177,7 @@ src/
   Old boards start a short countdown when first stood on (they sag and tremble meanwhile),
   then drop piece by piece into the alley. Awnings throw the cat up at a fixed speed the
   moment it lands on them (letting go of jump doesn't cut the throw short); the canvas sags
-  and springs back.
+  and springs back. Stage VII's trampolines are the same thing.
 - **Mobile.** Touch zones (left third slides, the rest jumps), a camera that keeps a constant
   horizontal field of view so portrait phones still see ahead, safe-area-aware HUD, a quality
   tier for phones (lower pixel ratio, half-resolution bloom, smaller reflection texture, fewer
