@@ -13,6 +13,7 @@ const COATS = {
   cream: [0xe2c69e, 0xf4e6d0, 0xffc040],
   tabby: [0x8a6a4c, 0xdcc8ac, 0x9cff8a],
   tuxedo: [0x24232b, 0xe8e4da, 0xffd060],
+  snow: [0xc8c2b6, 0xeeeae2, 0x9adcd0], // the snow leopard's
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));

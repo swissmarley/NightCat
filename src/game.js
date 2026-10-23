@@ -2,7 +2,7 @@
 // camera, stage loading and the render loop.
 import * as THREE from 'three';
 import { Cat } from './cat.js';
-import { buildLevel, resetCheckpoints, activateCheckpoint, resetBrittle, BRITTLE_DELAY } from './level.js';
+import { buildLevel, resetCheckpoints, activateCheckpoint, resetBrittle, BRITTLE_DELAY, LIFT_V, LIFT_SINK, LIFT_A, LIFT_K } from './level.js';
 import { World } from './world.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
@@ -15,10 +15,11 @@ import { harbourTheme } from './themes/harbour.js';
 import { gardenTheme } from './themes/garden.js';
 import { cityTheme } from './themes/city.js';
 import { trainTheme } from './themes/train.js';
+import { monasteryTheme } from './themes/monastery.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme, city: cityTheme, train: trainTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme, city: cityTheme, train: trainTheme, monastery: monasteryTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
@@ -261,6 +262,13 @@ export class Game {
         this.ui.toast(this.theme.bouncyHint || 'an awning below — drop onto it and it throws you high', 2200);
       }
     }
+    if (!this.hints.lift) {
+      const z = level.lifts.find((zone) => zone.x0 > p.x && zone.x0 - p.x < 11);
+      if (z) {
+        this.hints.lift = true;
+        this.ui.toast(this.theme.liftHint || 'the wind rises here — jump into it and it carries you up', 2400);
+      }
+    }
     if (!this.hints.gap) {
       const first = level.platforms[0];
       if (first.x1 - p.x < 5) {
@@ -296,6 +304,7 @@ export class Game {
     p.sliding = false;
     p.diving = false;
     p.bounced = false;
+    p.lift = null;
     p.forceSlide = 0;
     p.slideGrace = 0;
     p.deathKind = null;
@@ -431,8 +440,19 @@ export class Game {
     if (!p.grounded) {
       if (!input.jumpHeld && p.vy > JUMP_CUT_V && !p.bounced) p.vy = JUMP_CUT_V;
       p.vy -= GRAVITY * h;
+      // over a gorge the wind carries the cat up, until it floats over the far side
+      const lift = p.diving ? null : level.lifts.find((z) => p.x > z.x0 && p.x < z.x1);
+      if (lift) {
+        const want = p.y < lift.ceil ? LIFT_V : -LIFT_SINK;
+        if (p.vy < want) p.vy = Math.min(want, p.vy + Math.max(LIFT_A, (want - p.vy) * LIFT_K) * h);
+      }
+      if (lift && lift !== p.lift) {
+        this.sfx.gust();
+        this.theme.onLift?.(lift, p.x);
+      }
+      p.lift = lift;
       p.y += p.vy * h;
-    }
+    } else p.lift = null;
 
     // old boards give way a moment after they are first stood on
     for (const pl of level.brittle) {
@@ -570,8 +590,8 @@ export class Game {
       }
     }
 
-    // fell off the walk
-    if (!p.grounded && p.y < -1.1) {
+    // fell off the walk (the wind in a gorge holds the cat up, though)
+    if (!p.grounded && p.y < -1.1 && !p.lift) {
       p.groundY = level.floorY;
       this.die('fall');
       return;
@@ -754,6 +774,7 @@ export class Game {
     let wasGrounded = true;
     let wasSliding = false;
     let wasBounced = false;
+    let wasLift = null;
     while (this.state === 'run' && t < maxSeconds) {
       this.stepRun(STEP);
       t += STEP;
@@ -769,6 +790,11 @@ export class Game {
       if (p.bounced !== wasBounced) {
         wasBounced = p.bounced;
         if (wasBounced) trace.push(`bounce@${p.x.toFixed(1)},${p.y.toFixed(2)}`);
+      }
+      if (p.lift !== wasLift) {
+        if (wasLift) trace.push(`out@${p.x.toFixed(1)},${p.y.toFixed(2)}`);
+        wasLift = p.lift;
+        if (wasLift) trace.push(`wind@${p.x.toFixed(1)},${p.y.toFixed(2)}`);
       }
     }
     this.autopilot = wasAuto;
@@ -982,7 +1008,8 @@ export class Game {
     const p = this.p;
     const c = this.cam;
     let tx, ty, tz, lookX, lookY;
-    const gy = p.groundY * 0.5;
+    // riding the wind over a gorge, the camera rises with the cat towards the far side
+    const gy = (p.lift ? Math.max(p.groundY, p.lift.ceil - 1) : p.groundY) * 0.5;
     if (this.state === 'title' || this.state === 'ready' || this.state === 'select' || this.state === 'loading') {
       tx = p.x + 1.4;
       ty = 2.6 + gy;

@@ -1,15 +1,20 @@
 // Stage definitions. Layouts are hand-authored lists of platforms and gaps.
 //
-// plat(len, top, obstacles) / gap(len) / boards(len, top). Obstacle x is
+// plat(len, top, obstacles) / gap(len) / boards(len, top) / awning(len, top) /
+// wind(len). Obstacle x is
 // relative to the platform start. Kinds are theme-specific; 'cp' is a checkpoint
 // marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell, fishline,
 // lanterns, wisteria, basket, chimes, carpet, fanous, peppers, bunting, trapeze,
-// bulbs) are slid under or jumped; stage I has none.
+// bulbs, flags, banner, gong) are slid under or jumped; stage I has none.
 // Boards are a platform that gives way BRITTLE_DELAY seconds after it is first
 // stood on: jump off them in time. An awning(len, top) is a stretched canvas that
 // throws the cat up (BOUNCE_V) the moment it lands on it: from anywhere on it the
 // throw must clear the next roof's wall, so leave ≥1.6u between its far end and
-// a wall up to 2.2u higher.
+// a wall up to 2.2u higher. A wind(len) is a gap with an updraft in it: in the
+// air over it the cat is carried up (LIFT_V) to float LIFT_HEAD over the higher
+// side, so it crosses gorges far wider than a jump, onto walls up to ≈2.4u
+// higher — even from walking off the edge or falling in, given ≥8.5u of wind
+// (≥10u for the highest).
 //
 // Authoring rules of thumb (full jump carries ≈5.5u at 7u/s, ≈7.2u at 9.4u/s):
 //   - a ground obstacle sits ≥4.5u after a gap landing and ≥5u after a step-up
@@ -23,7 +28,8 @@ function make(fn) {
   const gap = (len) => items.push({ type: 'gap', len });
   const boards = (len, top) => items.push({ type: 'plat', len, top, obs: [], brittle: true });
   const awning = (len, top) => items.push({ type: 'plat', len, top, obs: [], bouncy: true });
-  fn(plat, gap, boards, awning);
+  const wind = (len) => items.push({ type: 'gap', len, lift: true });
+  fn(plat, gap, boards, awning, wind);
   return items;
 }
 
@@ -673,6 +679,106 @@ export const STAGES = [
         plat(16, 0.4, [{ x: 7.5, kind: 'drum' }]);
         gap(4.0);
         plat(28, 0, [{ x: 9, kind: 'bunting' }]); // home: the family's coach; home sits 14u in
+      }),
+  },
+  {
+    id: 8,
+    numeral: 'VIII',
+    name: 'the cloud monastery',
+    blurb: 'prayer flags, butter lamps, and a sea of clouds',
+    theme: 'monastery',
+    seed: 80823,
+    baseSpeed: 9.2,
+    speedGain: 2.4,
+    goalOffset: 14,
+    extraSparks: [
+      { x: 9, y: 0.6 },
+      { x: 10.4, y: 0.6 },
+      { x: 11.8, y: 0.6 },
+      { x: 16.0, y: 0.3 },
+    ],
+    // Platforms that touch are one building of the monastery, standing on its
+    // cliff; a lone short one is a rock pinnacle. Old boards are what is left of
+    // a rope bridge, and the winds blow up out of the gorges between the cliffs.
+    layout: () =>
+      make((plat, gap, boards, awning, wind) => {
+        plat(24, 0); // the first roof: nothing but the walk, a cat by a prayer wheel and the sparks
+        gap(2.6);
+        plat(13, 0, [{ x: 5.8, kind: 'cairn' }]); // low enough for a quick hop
+        gap(2.8);
+        plat(5.5, 0.3); // rock pinnacles: hop, hop, hop
+        gap(2.4);
+        plat(5.5, -0.1);
+        gap(2.4);
+        plat(5.5, 0.3);
+        gap(2.6);
+        plat(18, 0.2, [{ x: 9, kind: 'flags' }]); // prayer flags strung low: slide under
+        plat(18, 1.0, [{ x: 9.5, kind: 'pots' }]); // wall
+        wind(8.5); // the first gorge: jump into the wind and it carries you up onto the tower
+        plat(21, 2.2, [{ x: 12, kind: 'wheel' }]);
+        gap(3.6);
+        plat(15, 1.4, [{ x: 9, kind: 'banner' }]); // gap + down
+        plat(18, 0.6, [
+          { x: 7.4, kind: 'burner' },
+          { x: 13, kind: 'cp' },
+        ]); // step down
+        gap(3.0); // an old rope bridge between two pinnacles, its end planks long gone
+        plat(5, 0.6);
+        gap(1.8);
+        boards(6, 0.6);
+        gap(1.8);
+        plat(5, 0.6);
+        gap(2.4);
+        plat(19, 0.6, [{ x: 8.5, kind: 'chorten' }]);
+        wind(9); // the gorge: wind, a pinnacle, wind again
+        plat(5.5, 1.4);
+        wind(9);
+        plat(22, 1.8, [{ x: 13, kind: 'gong' }]);
+        plat(16, 1.0, [{ x: 9.5, kind: 'cairn' }]); // step down
+        gap(3.3);
+        plat(18, 0.5, [
+          { x: 7, kind: 'flags' },
+          { x: 13.5, kind: 'cp' },
+        ]);
+        gap(1.8); // the old bridges again: hop, hop, hop
+        boards(6, 0.5);
+        gap(1.8);
+        boards(6, 0.5);
+        gap(2.0);
+        plat(18, 0.5, [{ x: 11, kind: 'banner' }]);
+        plat(4.5, 1.0); // up the steps: hop, hop, hop
+        plat(4.5, 1.5);
+        plat(19, 2.0, [{ x: 10.5, kind: 'wheel' }]); // a tower
+        gap(3.8);
+        plat(16, 1.2, [{ x: 9.5, kind: 'gong' }]); // gap + down
+        plat(17, 0.2, [
+          { x: 7.4, kind: 'pots' },
+          { x: 9.0, kind: 'cairn' },
+        ]); // step down; one jump clears both
+        wind(11.5); // the deep gorge: up from low onto the tallest tower
+        plat(21, 2.6, [{ x: 11, kind: 'chorten' }]);
+        gap(3.8);
+        plat(16, 1.8, [{ x: 11, kind: 'flags' }]); // gap + down
+        plat(21, 0.4, [
+          { x: 6, kind: 'cp' },
+          { x: 13, kind: 'banner' },
+        ]); // step down
+        plat(19, 1.0, [{ x: 9.5, kind: 'burner' }]); // wall
+        boards(6, 1.0); // planks, then a gap: leave them early
+        gap(1.6);
+        plat(18, 0.6, [{ x: 11.5, kind: 'gong' }]);
+        wind(9); // the last gorges: wind, a pinnacle, wind
+        plat(5.5, 1.2);
+        wind(9.5);
+        plat(24, 1.4, [{ x: 13.5, kind: 'wheel' }]);
+        gap(3.0);
+        plat(5.5, 0.4); // the last pinnacles, long enough for a full jump at this speed
+        gap(2.6);
+        plat(6, 0.8);
+        gap(2.6);
+        plat(16, 0.4, [{ x: 7.5, kind: 'chorten' }]);
+        gap(4.0);
+        plat(28, 0, [{ x: 9, kind: 'flags' }]); // home: the great hall; home sits 14u in
       }),
   },
 ];
