@@ -1,4 +1,4 @@
-// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour) and one-shot sounds. No samples.
+// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour / garden) and one-shot sounds. No samples.
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -38,7 +38,7 @@ export class Sfx {
     return buf;
   }
 
-  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III) or 'harbour' (stage IV). */
+  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III), 'harbour' (stage IV) or 'garden' (stage V). */
   setAmbience(kind) {
     this.wantAmbience = kind;
     if (!this.ctx || kind === this.ambKind) return;
@@ -53,16 +53,17 @@ export class Sfx {
 
     // pad: slow detuned oscillators under a low-pass, breathing gently
     const padGain = ctx.createGain();
-    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' ? 0.03 : 0.035;
+    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' || kind === 'garden' ? 0.03 : 0.035;
     const padLp = ctx.createBiquadFilter();
     padLp.type = 'lowpass';
-    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420 }[kind];
+    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420, garden: 440 }[kind];
     padLp.connect(padGain).connect(out);
     const chord = {
       rain: [55, 82.6, 110.4],
       night: [49, 73.6, 98.2, 147.1],
       snow: [43.65, 65.4, 87.3, 130.8, 164.8],
       harbour: [55, 82.4, 110, 138.6, 164.8],
+      garden: [73.4, 110, 146.8, 185, 220],
     }[kind];
     for (const f of chord) {
       const o = ctx.createOscillator();
@@ -174,6 +175,37 @@ export class Sfx {
         this.ambTimer = setTimeout(tink, 500 + Math.random() * 2300);
       };
       this.ambTimer = setTimeout(tink, 1200);
+    } else if (kind === 'garden') {
+      // a soft breeze in the trees
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 340;
+      const g = ctx.createGain();
+      g.gain.value = 0.026;
+      const swell = ctx.createOscillator();
+      swell.frequency.value = 0.08;
+      const swellGain = ctx.createGain();
+      swellGain.gain.value = 0.018;
+      swell.connect(swellGain).connect(g.gain);
+      swell.start();
+      nodes.push(swell);
+      noise.connect(lp).connect(g).connect(out);
+      // frogs in the pond, and now and then the nightingale
+      let song = 4;
+      const croak = () => {
+        if (this.ambKind !== 'garden') return;
+        const f = 300 + Math.random() * 260;
+        const n = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < n; i++) this._tone(f, { type: 'sawtooth', dur: 0.06, vol: 0.004, slide: -50, attack: 0.01, delay: i * 0.08 });
+        const wait = 600 + Math.random() * 2400;
+        song -= wait / 1000;
+        if (song <= 0) {
+          this.nightingale(0.6);
+          song = 9 + Math.random() * 10;
+        }
+        this.ambTimer = setTimeout(croak, wait);
+      };
+      this.ambTimer = setTimeout(croak, 900);
     } else {
       // wind through trees: low noise with a slow swell
       const lp = ctx.createBiquadFilter();
@@ -363,6 +395,27 @@ export class Sfx {
   /** A bell brushed in passing. */
   chime() {
     this._bell(523, { vol: 0.07, dur: 2.2 });
+  }
+  /** Wind chimes knocked in passing: a handful of high bells, one after another. */
+  chimes() {
+    const notes = [1568, 1760, 2093, 2349, 2637].sort(() => Math.random() - 0.5);
+    notes.forEach((f, i) => this._bell(f, { vol: 0.018, dur: 1.6, delay: i * (0.05 + Math.random() * 0.07) }));
+  }
+  /** A frog dropping into the pond. */
+  plop() {
+    this._tone(900, { dur: 0.12, vol: 0.04, slide: -620 });
+    this._noise(0.08, { freq: 1300, q: 1.2, vol: 0.025 });
+  }
+  /** A nightingale's phrase: a few rising whistles, a quick trill, a low note to end. */
+  nightingale(vol = 1) {
+    const v = 0.014 * vol;
+    let t = 0;
+    const whistles = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < whistles; i++, t += 0.16) this._tone(1700 + Math.random() * 300, { dur: 0.09, vol: v, slide: 900, delay: t });
+    t += 0.08;
+    const lo = 2900 + Math.random() * 400;
+    for (let i = 0; i < 10; i++, t += 0.035) this._tone(i % 2 ? lo * 1.18 : lo, { dur: 0.03, vol: v * 0.8, delay: t });
+    this._tone(1300, { dur: 0.22, vol: v, slide: -350, delay: t + 0.06 });
   }
   /** A rocket climbing over the bay. */
   whistle(dur = 1) {

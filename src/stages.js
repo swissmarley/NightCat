@@ -3,11 +3,13 @@
 // plat(len, top, obstacles) / gap(len) / boards(len, top). Obstacle x is
 // relative to the platform start. Kinds are theme-specific; 'cp' is a checkpoint
 // marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell, fishline,
-// lanterns) are slid under or jumped; stage I has none. Boards are a platform that gives way
-// BRITTLE_DELAY seconds after it is first stood on: jump off them in time.
+// lanterns, wisteria, basket, chimes) are slid under or jumped; stage I has none.
+// Boards are a platform that gives way BRITTLE_DELAY seconds after it is first
+// stood on: jump off them in time.
 //
 // Authoring rules of thumb (full jump carries ≈5.5u at 7u/s, ≈7.2u at 9.4u/s):
 //   - a ground obstacle sits ≥4.5u after a gap landing and ≥5u after a step-up
+//     (≥9u after a step-up from stage IV on: a full jump onto a wall lands 5–7u in)
 //   - a ground obstacle sits ≤ len − (jump range + 0.5) so the landing stays dry
 //   - a hanging obstacle never sits where a jump would land on it
 
@@ -361,6 +363,104 @@ export const STAGES = [
         plat(20, 0.6, [{ x: 11.5, kind: 'lanterns' }]);
         gap(4.4);
         plat(30, 0, [{ x: 9, kind: 'lanterns' }]); // home stretch; home sits 14u in
+      }),
+  },
+  {
+    id: 5,
+    numeral: 'V',
+    name: 'the glass garden',
+    blurb: 'blossom, glasshouses, and frogs singing to the moon',
+    theme: 'garden',
+    seed: 52317,
+    baseSpeed: 8.5,
+    speedGain: 2.4,
+    goalOffset: 14,
+    extraSparks: [
+      { x: 9, y: 0.6 },
+      { x: 10.4, y: 0.6 },
+      { x: 11.8, y: 0.6 },
+      { x: 16.0, y: 0.3 },
+    ],
+    // A short platform with gaps either side is dressed as a clipped hedge, and
+    // one 1.3u or more up as the ridge of a glasshouse; the rest are terrace walls.
+    layout: () =>
+      make((plat, gap, boards) => {
+        plat(22, 0); // the garden wall: nothing but the walk, a cat in a flowerpot and the sparks
+        gap(2.5);
+        plat(13, 0, [{ x: 5.6, kind: 'can' }]);
+        gap(2.8);
+        plat(4.6, -0.1); // clipped hedges: hop, hop, hop
+        gap(2.2);
+        plat(4.6, 0.3);
+        gap(2.2);
+        plat(4.6, 0.0);
+        gap(2.6);
+        plat(17, 0.2, [{ x: 9.5, kind: 'wisteria' }]); // wisteria hung low: slide under
+        plat(18, 1.4, [{ x: 10, kind: 'vent' }]); // wall: up onto the first glasshouse
+        gap(3.4);
+        plat(18, 0.6, [
+          { x: 6, kind: 'gnome' },
+          { x: 12, kind: 'cp' },
+        ]);
+        gap(3.0); // an old plank bridge between two hedges
+        plat(4.6, 0.6);
+        gap(1.8);
+        boards(6, 0.6);
+        gap(1.8);
+        plat(4.6, 0.6);
+        gap(2.4);
+        plat(20, 0.4, [{ x: 8, kind: 'pots' }]);
+        plat(15, 1.6, [{ x: 10.5, kind: 'vent' }]); // wall: the second glasshouse
+        plat(14, 1.6, [{ x: 7.5, kind: 'basket' }]);
+        gap(3.6);
+        plat(14, 1.0, [{ x: 8, kind: 'barrow' }]); // gap + down onto a wall
+        plat(16, 0.2, [{ x: 8, kind: 'birdbath' }]); // step down
+        gap(4.0);
+        plat(4.6, 0.5); // hedges, taller and further apart
+        gap(2.8);
+        plat(4.6, 0.9);
+        gap(3.2);
+        plat(19, 0.5, [
+          { x: 9, kind: 'chimes' },
+          { x: 14, kind: 'cp' },
+        ]);
+        gap(1.8); // the old planks again: hop, hop, hop
+        boards(6, 0.5);
+        gap(1.8);
+        boards(6, 0.5);
+        gap(2.0);
+        plat(18, 0.5, [{ x: 11, kind: 'wisteria' }]);
+        plat(4.5, 1.0); // up a terrace of glasshouses, one step at a time
+        plat(4.5, 1.5);
+        plat(4.5, 2.0);
+        plat(18, 2.4, [{ x: 10.5, kind: 'vent' }]); // the tallest
+        gap(3.8);
+        plat(16, 1.6, [{ x: 9.5, kind: 'basket' }]); // gap + down: a lower glasshouse
+        plat(17, 0.4, [
+          { x: 7.4, kind: 'pots' },
+          { x: 8.8, kind: 'can' },
+        ]); // step down; one jump clears both
+        gap(4.2);
+        plat(4.6, 0); // hedges again
+        gap(2.8);
+        plat(5.6, 0.6);
+        gap(2.8);
+        plat(21, 0.4, [
+          { x: 6, kind: 'cp' },
+          { x: 13, kind: 'chimes' },
+        ]);
+        plat(19, 1.0, [{ x: 9.5, kind: 'gnome' }]); // wall
+        boards(6, 1.0); // planks, then a gap: leave them early
+        gap(1.6);
+        plat(20, 0.6, [{ x: 11.5, kind: 'basket' }]);
+        gap(4.4);
+        plat(5, 0.2); // the last hedges, long enough for a full jump at this speed
+        gap(2.6);
+        plat(6, 0.7);
+        gap(2.6);
+        plat(16, 0.4, [{ x: 7.5, kind: 'birdbath' }]);
+        gap(4.0);
+        plat(30, 0, [{ x: 9, kind: 'wisteria' }]); // home stretch; home sits 14u in
       }),
   },
 ];

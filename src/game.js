@@ -12,10 +12,11 @@ import { streetTheme } from './themes/street.js';
 import { shrineTheme } from './themes/shrine.js';
 import { snowTheme } from './themes/snow.js';
 import { harbourTheme } from './themes/harbour.js';
+import { gardenTheme } from './themes/garden.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
