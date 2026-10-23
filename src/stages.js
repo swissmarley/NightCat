@@ -5,7 +5,10 @@
 // marker. Hanging kinds (laundry, hangsign, rope, branch, garland, bell, fishline,
 // lanterns, wisteria, basket, chimes) are slid under or jumped; stage I has none.
 // Boards are a platform that gives way BRITTLE_DELAY seconds after it is first
-// stood on: jump off them in time.
+// stood on: jump off them in time. An awning(len, top) is a stretched canvas that
+// throws the cat up (BOUNCE_V) the moment it lands on it: from anywhere on it the
+// throw must clear the next roof's wall, so leave ≥1.6u between its far end and
+// a wall up to 2.2u higher.
 //
 // Authoring rules of thumb (full jump carries ≈5.5u at 7u/s, ≈7.2u at 9.4u/s):
 //   - a ground obstacle sits ≥4.5u after a gap landing and ≥5u after a step-up
@@ -18,7 +21,8 @@ function make(fn) {
   const plat = (len, top, obs = []) => items.push({ type: 'plat', len, top, obs });
   const gap = (len) => items.push({ type: 'gap', len });
   const boards = (len, top) => items.push({ type: 'plat', len, top, obs: [], brittle: true });
-  fn(plat, gap, boards);
+  const awning = (len, top) => items.push({ type: 'plat', len, top, obs: [], bouncy: true });
+  fn(plat, gap, boards, awning);
   return items;
 }
 
@@ -461,6 +465,105 @@ export const STAGES = [
         plat(16, 0.4, [{ x: 7.5, kind: 'birdbath' }]);
         gap(4.0);
         plat(30, 0, [{ x: 9, kind: 'wisteria' }]); // home stretch; home sits 14u in
+      }),
+  },
+  {
+    id: 6,
+    numeral: 'VI',
+    name: 'the blue city',
+    blurb: 'blue walls, brass lanterns, and dunes under the Milky Way',
+    theme: 'city',
+    seed: 60621,
+    baseSpeed: 8.8,
+    speedGain: 2.4,
+    goalOffset: 14,
+    extraSparks: [
+      { x: 9, y: 0.6 },
+      { x: 10.4, y: 0.6 },
+      { x: 11.8, y: 0.6 },
+      { x: 16.0, y: 0.3 },
+    ],
+    // A platform 1.8u or more up is dressed as a tower of the old earth walls, and a
+    // short one with gaps either side as an arch over an alley; the rest are rows of
+    // houses. Awnings are market stalls down in the alleys.
+    layout: () =>
+      make((plat, gap, boards, awning) => {
+        plat(22, 0); // the top of the town: nothing but the walk, a cat on a roof and the sparks
+        gap(2.6);
+        plat(13, 0, [{ x: 5.8, kind: 'oranges' }]); // low enough for a quick hop
+        gap(2.8);
+        plat(5, 0.3); // arches over the alleys: hop, hop
+        gap(2.4);
+        plat(5, 0);
+        gap(2.6);
+        plat(17, 0.2, [{ x: 9, kind: 'carpet' }]); // rugs hung out to air: slide under
+        plat(18, 1.0, [{ x: 9.5, kind: 'rugs' }]); // wall
+        gap(2.2); // the first awning: drop onto it and it throws you up onto the tower
+        awning(4.5, -0.4);
+        gap(2.3);
+        plat(21, 1.9, [{ x: 12, kind: 'cage' }]);
+        gap(3.6);
+        plat(15, 1.2, [{ x: 9, kind: 'fanous' }]); // gap + down
+        plat(18, 0.4, [
+          { x: 7.4, kind: 'brazier' },
+          { x: 13, kind: 'cp' },
+        ]); // step down
+        gap(3.0); // old reed mats between two arches
+        plat(5, 0.4);
+        gap(1.8);
+        boards(6, 0.4);
+        gap(1.8);
+        plat(5, 0.4);
+        gap(2.4);
+        plat(19, 0.6, [{ x: 8.5, kind: 'oranges' }]);
+        gap(2.4); // the souk: awning to awning, then up onto the walls
+        awning(4.5, -0.6);
+        gap(4.2);
+        awning(5.5, -0.6);
+        gap(2.2);
+        plat(22, 1.6, [{ x: 13, kind: 'peppers' }]);
+        plat(16, 0.8, [{ x: 9.5, kind: 'jar' }]); // step down
+        gap(3.6);
+        plat(18, 0.5, [
+          { x: 7, kind: 'carpet' },
+          { x: 13.5, kind: 'cp' },
+        ]);
+        gap(1.8); // the old mats again: hop, hop, hop
+        boards(6, 0.5);
+        gap(1.8);
+        boards(6, 0.5);
+        gap(2.0);
+        plat(18, 0.5, [{ x: 11, kind: 'fanous' }]);
+        plat(4.5, 1.0); // up the steps: hop, hop, hop
+        plat(4.5, 1.5);
+        plat(19, 2.0, [{ x: 10.5, kind: 'cage' }]); // a high tower
+        gap(2.2); // down to an awning and back up onto the tallest
+        awning(4.5, 0.2);
+        gap(2.6);
+        plat(21, 2.6, [{ x: 11, kind: 'brazier' }]);
+        gap(3.8);
+        plat(16, 1.6, [{ x: 9.5, kind: 'peppers' }]); // gap + down
+        plat(17, 0.4, [
+          { x: 7.4, kind: 'rugs' },
+          { x: 9.0, kind: 'oranges' },
+        ]); // step down; one jump clears both
+        gap(4.0);
+        plat(21, 0.4, [
+          { x: 6, kind: 'cp' },
+          { x: 13, kind: 'fanous' },
+        ]);
+        plat(19, 1.0, [{ x: 9.5, kind: 'brazier' }]); // wall
+        boards(6, 1.0); // mats, then a gap: leave them early
+        gap(1.6);
+        plat(18, 0.6, [{ x: 11.5, kind: 'carpet' }]);
+        gap(2.4); // the last market: awning to awning
+        awning(4.5, -0.4);
+        gap(4.6);
+        awning(6.5, -0.4);
+        gap(2.4);
+        plat(24, 1.4, [{ x: 13.5, kind: 'cage' }]);
+        gap(4.2);
+        plat(30, 0, [{ x: 9, kind: 'fanous' }]); // home stretch; home sits 14u in
       }),
   },
 ];

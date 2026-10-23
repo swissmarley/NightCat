@@ -834,3 +834,416 @@ export function conservatoryTexture(rng) {
   }
   return finish(c, { anisotropy: 1 });
 }
+
+/**
+ * Limewash brushed on in uneven coats: near-white, streaked and patchy, so a
+ * material colour can make it any blue (or white, or ochre). 1 tile ≈ 2u.
+ */
+export function limewashTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#d8dce0';
+  g.fillRect(0, 0, W, W);
+  // brush strokes, each coat a little lighter or darker than the last
+  for (let i = 0; i < 260; i++) {
+    const l = 180 + rng() * 75;
+    g.strokeStyle = `rgba(${l - 4}, ${l}, ${l + 6}, ${0.05 + rng() * 0.12})`;
+    g.lineWidth = 3 + rng() * 10;
+    const x = rng() * W;
+    const y = rng() * W;
+    const len = 10 + rng() * 40;
+    const a = (rng() - 0.5) * 1.2 + (rng() < 0.5 ? 0 : Math.PI / 2);
+    for (const ox of [0, -W, W]) {
+      for (const oy of [0, -W, W]) {
+        g.beginPath();
+        g.moveTo(x + ox, y + oy);
+        g.lineTo(x + ox + Math.cos(a) * len, y + oy + Math.sin(a) * len);
+        g.stroke();
+      }
+    }
+  }
+  // worn patches where the plaster underneath shows through
+  for (let i = 0; i < 14; i++) {
+    g.fillStyle = `rgba(150, 140, 125, ${0.08 + rng() * 0.12})`;
+    g.beginPath();
+    g.ellipse(rng() * W, rng() * W, 4 + rng() * 16, 3 + rng() * 9, rng() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  addNoise(g, W, W, 18, rng);
+  return finish(c);
+}
+
+/** Awning canvas in broad stripes with a pinstripe between: colours [ground, stripe, pin]. Stripes run across u. */
+export function awningTexture(colors) {
+  const W = 128;
+  const H = 8;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const [ground, stripe, pin] = colors;
+  g.fillStyle = ground;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = stripe;
+  g.fillRect(0, 0, W / 4, H);
+  g.fillRect(W / 2, 0, W / 4, H);
+  g.fillStyle = pin;
+  for (const x of [W * 0.375, W * 0.875]) g.fillRect(x - 2, 0, 4, H);
+  return finish(c, { anisotropy: 2 });
+}
+
+/**
+ * Four rugs on one sheet (2 × 2): a border, a field in a deep colour, rows of
+ * diamond medallions, a fringe at the ends. Each rug fills a quarter of the sheet.
+ */
+export function rugTexture(rng) {
+  const W = 512;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  const palettes = [
+    ['#8a1c22', '#e8b850', '#1c2a5a', '#f0e2c0'],
+    ['#1e3a6e', '#d8a040', '#7a1a28', '#ece0c8'],
+    ['#b8502a', '#2a1a14', '#e8c878', '#f2e6d0'],
+    ['#2a5a4a', '#c83a2a', '#f0d080', '#e8dcc0'],
+  ];
+  const S = W / 2;
+  palettes.forEach(([field, border, motif, light], k) => {
+    const x0 = (k % 2) * S;
+    const y0 = Math.floor(k / 2) * S;
+    g.save();
+    g.translate(x0, y0);
+    // fringe at top and bottom
+    g.fillStyle = light;
+    for (let x = 6; x < S - 6; x += 4) {
+      g.fillRect(x, 0, 2, 10);
+      g.fillRect(x, S - 10, 2, 10);
+    }
+    g.fillStyle = border;
+    g.fillRect(6, 10, S - 12, S - 20);
+    g.fillStyle = field;
+    g.fillRect(22, 26, S - 44, S - 52);
+    // a running zig-zag in the border
+    g.strokeStyle = motif;
+    g.lineWidth = 3;
+    g.beginPath();
+    for (let x = 10; x <= S - 10; x += 12) g.lineTo(x, 18 + ((x / 12) % 2 ? 4 : -4));
+    g.stroke();
+    g.beginPath();
+    for (let x = 10; x <= S - 10; x += 12) g.lineTo(x, S - 18 + ((x / 12) % 2 ? 4 : -4));
+    g.stroke();
+    // diamond medallions down the field, each with a smaller one inside
+    const diamond = (cx, cy, rx, ry, col) => {
+      g.fillStyle = col;
+      g.beginPath();
+      g.moveTo(cx, cy - ry);
+      g.lineTo(cx + rx, cy);
+      g.lineTo(cx, cy + ry);
+      g.lineTo(cx - rx, cy);
+      g.fill();
+    };
+    for (let i = 0; i < 3; i++) {
+      const cy = 26 + ((i + 0.5) / 3) * (S - 52);
+      diamond(S / 2, cy, 46, 30, motif);
+      diamond(S / 2, cy, 30, 19, light);
+      diamond(S / 2, cy, 14, 9, border);
+      for (const sx of [-1, 1]) diamond(S / 2 + sx * 74, cy, 10, 14, light);
+    }
+    g.restore();
+  });
+  addNoise(g, W, W, 22, rng);
+  return finish(c, { repeat: false });
+}
+
+/**
+ * Pierced brass: dark metal with rows of little stars and dots cut through, the
+ * light behind them showing. Map and emissive map both (the holes glow).
+ */
+export function lanternTexture() {
+  const W = 128;
+  const H = 128;
+  const a = canvas(W, H);
+  const b = canvas(W, H);
+  const g = a.getContext('2d');
+  const e = b.getContext('2d');
+  g.fillStyle = '#5a3e1c';
+  g.fillRect(0, 0, W, H);
+  e.fillStyle = '#000';
+  e.fillRect(0, 0, W, H);
+  const star = (ctx, cx, cy, r) => {
+    ctx.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const rr = i % 2 ? r * 0.45 : r;
+      const an = (i / 16) * Math.PI * 2;
+      ctx.lineTo(cx + Math.cos(an) * rr, cy + Math.sin(an) * rr);
+    }
+    ctx.fill();
+  };
+  for (const ctx of [g, e]) {
+    ctx.fillStyle = '#ffd890';
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const cx = (x + (y % 2 ? 0.5 : 0) + 0.25) * (W / 4);
+        const cy = (y + 0.5) * (H / 4);
+        star(ctx, cx % W, cy, 9);
+        for (let k = 0; k < 6; k++) {
+          const an = (k / 6) * Math.PI * 2;
+          ctx.fillRect(((cx + Math.cos(an) * 14) % W) - 1, cy + Math.sin(an) * 14 - 1, 2.5, 2.5);
+        }
+      }
+    }
+  }
+  return { map: finish(a, { anisotropy: 2 }), emissiveMap: finish(b, { anisotropy: 2 }) };
+}
+
+/** Wind-rippled sand. 1 tile ≈ 3u. */
+export function sandTexture(rng) {
+  const W = 256;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#b89870';
+  g.fillRect(0, 0, W, W);
+  for (let i = 0; i < 46; i++) {
+    const y0 = (i / 46) * W + rng() * 3;
+    g.strokeStyle = `rgba(${rng() < 0.5 ? '255, 236, 200' : '90, 66, 40'}, ${0.12 + rng() * 0.12})`;
+    g.lineWidth = 1 + rng() * 2;
+    g.beginPath();
+    for (let x = 0; x <= W; x += 8) g.lineTo(x, y0 + 3 * Math.sin((x / W) * Math.PI * 4 + i));
+    g.stroke();
+  }
+  addNoise(g, W, W, 16, rng);
+  return finish(c);
+}
+
+/** Zellige: glazed tiles in eight-pointed stars and crosses, white grout between. 1 tile ≈ 0.6u. */
+export function zelligeTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#e8e2d4';
+  g.fillRect(0, 0, W, W);
+  const cols = ['#1e5aa0', '#2a8a6a', '#e0b040', '#c03a2a', '#14305a'];
+  const star = (cx, cy, r, col) => {
+    g.fillStyle = col;
+    g.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const rr = i % 2 ? r * 0.72 : r;
+      const an = (i / 16) * Math.PI * 2 + Math.PI / 16;
+      g.lineTo(cx + Math.cos(an) * rr, cy + Math.sin(an) * rr);
+    }
+    g.fill();
+  };
+  for (const [x, y] of [
+    [0, 0],
+    [W, 0],
+    [0, W],
+    [W, W],
+    [W / 2, W / 2],
+  ]) {
+    star(x, y, 28, cols[0]);
+    star(x, y, 12, cols[2]);
+  }
+  for (const [x, y] of [
+    [W / 2, 0],
+    [0, W / 2],
+    [W, W / 2],
+    [W / 2, W],
+  ]) {
+    star(x, y, 20, cols[1]);
+    star(x, y, 8, cols[3]);
+  }
+  addNoise(g, W, W, 14, rng);
+  return finish(c);
+}
+
+/**
+ * A small arched window in a deep reveal, with a wrought grille: lit (warm, a
+ * curtain), or dark. Also the emissive map when lit.
+ */
+export function archWindowTexture(lit) {
+  const W = 64;
+  const H = 96;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  const arch = (inset) => {
+    g.beginPath();
+    g.moveTo(inset, H - inset);
+    g.lineTo(inset, W / 2);
+    g.arc(W / 2, W / 2, W / 2 - inset, Math.PI, 0);
+    g.lineTo(W - inset, H - inset);
+    g.closePath();
+  };
+  g.fillStyle = '#1a1410';
+  arch(0);
+  g.fill();
+  if (lit) {
+    const grad = g.createLinearGradient(0, 8, 0, H);
+    grad.addColorStop(0, '#ffe6b8');
+    grad.addColorStop(1, '#ff9a48');
+    g.fillStyle = grad;
+  } else {
+    const grad = g.createLinearGradient(0, 8, W, H);
+    grad.addColorStop(0, '#22304a');
+    grad.addColorStop(1, '#0a0f1a');
+    g.fillStyle = grad;
+  }
+  arch(7);
+  g.fill();
+  if (lit) {
+    g.fillStyle = 'rgba(140, 40, 30, 0.6)';
+    g.beginPath();
+    g.moveTo(7, 30);
+    g.quadraticCurveTo(26, 60, 9, H - 7);
+    g.lineTo(7, H - 7);
+    g.fill();
+  }
+  g.strokeStyle = '#140e0a';
+  g.lineWidth = 3;
+  for (const x of [W * 0.35, W * 0.65]) {
+    g.beginPath();
+    g.moveTo(x, 10);
+    g.lineTo(x, H - 7);
+    g.stroke();
+  }
+  for (const y of [H * 0.45, H * 0.7]) {
+    g.beginPath();
+    g.moveTo(7, y);
+    g.lineTo(W - 7, y);
+    g.stroke();
+  }
+  return finish(c, { repeat: false });
+}
+
+/** A studded door under a horseshoe arch, painted (the paint colour comes from the material). */
+export function doorTexture(rng) {
+  const W = 128;
+  const H = 192;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#e8e8e8';
+  g.beginPath();
+  g.moveTo(8, H);
+  g.lineTo(8, 64);
+  g.arc(W / 2, 64, W / 2 - 8, Math.PI * 0.92, Math.PI * 0.08);
+  g.lineTo(W - 8, H);
+  g.closePath();
+  g.fill();
+  // planks and a frame round the panels
+  g.strokeStyle = 'rgba(40, 40, 50, 0.5)';
+  g.lineWidth = 2;
+  for (let x = 24; x < W - 10; x += 16) {
+    g.beginPath();
+    g.moveTo(x, 30);
+    g.lineTo(x, H);
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(30, 30, 40, 0.7)';
+  g.lineWidth = 4;
+  g.strokeRect(20, 80, W - 40, 44);
+  g.strokeRect(20, 134, W - 40, 50);
+  // iron studs
+  g.fillStyle = '#2a2a30';
+  for (let y = 70; y < H - 6; y += 14) {
+    for (const x of [14, W - 14]) {
+      g.beginPath();
+      g.arc(x, y, 2.5, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  addNoise(g, W, H, 20, rng);
+  return finish(c, { repeat: false });
+}
+
+/**
+ * The Milky Way as a long band: a glowing river of faint stars with dark dust
+ * lanes along it. RGB is the colour, alpha the brightness (for additive blending).
+ */
+export function milkyWayTexture(rng) {
+  const W = 1024;
+  const H = 256;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  // the glow: a soft river along the middle, swelling towards the core...
+  for (let x = 0; x < W; x += 4) {
+    const core = Math.exp(-Math.pow((x - W * 0.62) / (W * 0.22), 2));
+    const half = H * (0.12 + 0.1 * core);
+    const y = H / 2 + 10 * Math.sin(x / 90);
+    const grad = g.createLinearGradient(0, y - half, 0, y + half);
+    const a = 0.05 + 0.09 * core;
+    grad.addColorStop(0, 'rgba(200, 212, 255, 0)');
+    grad.addColorStop(0.5, `rgba(${226 + 20 * core}, ${222 + 6 * core}, 250, ${a})`);
+    grad.addColorStop(1, 'rgba(200, 212, 255, 0)');
+    g.fillStyle = grad;
+    g.fillRect(x, y - half, 4, half * 2);
+  }
+  // ...and soft clouds in it
+  for (let i = 0; i < 520; i++) {
+    const x = rng() * W;
+    const core = Math.exp(-Math.pow((x - W * 0.62) / (W * 0.22), 2));
+    const y = H / 2 + (rng() - 0.5) * H * (0.18 + 0.2 * core) + 10 * Math.sin(x / 90);
+    const r = 24 + rng() * 50;
+    const a = (0.012 + rng() * 0.025) * (0.5 + core);
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    const warm = rng() < 0.3 + core * 0.4;
+    grad.addColorStop(0, warm ? `rgba(255, 228, 196, ${a})` : `rgba(200, 214, 255, ${a})`);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.fillStyle = grad;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // dust lanes: dark streaks cut through the glow
+  g.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 90; i++) {
+    const x = rng() * W;
+    const y = H / 2 + (rng() - 0.4) * H * 0.18 + 6 * Math.sin(x / 70);
+    g.fillStyle = `rgba(0, 0, 0, ${0.15 + rng() * 0.25})`;
+    g.beginPath();
+    g.ellipse(x, y, 20 + rng() * 60, 2 + rng() * 6, (rng() - 0.5) * 0.3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+  // the dense faint stars of the band itself
+  for (let i = 0; i < 2600; i++) {
+    const x = rng() * W;
+    const spread = H * (0.12 + rng() * 0.2);
+    const y = H / 2 + (rng() + rng() + rng() - 1.5) * spread;
+    g.fillStyle = `rgba(255, 250, 240, ${0.2 + rng() * 0.6})`;
+    g.fillRect(x, y, rng() < 0.1 ? 2 : 1, 1);
+  }
+  // fade out towards both ends and edges
+  g.globalCompositeOperation = 'destination-in';
+  const fadeX = g.createLinearGradient(0, 0, W, 0);
+  fadeX.addColorStop(0, 'rgba(0,0,0,0)');
+  fadeX.addColorStop(0.15, 'rgba(0,0,0,1)');
+  fadeX.addColorStop(0.85, 'rgba(0,0,0,1)');
+  fadeX.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fadeX;
+  g.fillRect(0, 0, W, H);
+  const fadeY = g.createLinearGradient(0, 0, 0, H);
+  fadeY.addColorStop(0, 'rgba(0,0,0,0)');
+  fadeY.addColorStop(0.3, 'rgba(0,0,0,1)');
+  fadeY.addColorStop(0.7, 'rgba(0,0,0,1)');
+  fadeY.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fadeY;
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+  return finish(c, { repeat: false, anisotropy: 1 });
+}
+
+/** A woven reed mat: straw-coloured, close vertical reeds, bound across now and then. */
+export function reedTexture(rng) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = '#a88a58';
+  g.fillRect(0, 0, W, W);
+  for (let x = 0; x < W; x += 3) {
+    const l = 45 + rng() * 25;
+    g.fillStyle = `hsl(${36 + rng() * 8}, ${35 + rng() * 15}%, ${l}%)`;
+    g.fillRect(x, 0, 2, W);
+  }
+  g.fillStyle = 'rgba(60, 40, 20, 0.7)';
+  for (const y of [W * 0.2, W * 0.7]) g.fillRect(0, y, W, 3);
+  addNoise(g, W, W, 16, rng);
+  return finish(c);
+}

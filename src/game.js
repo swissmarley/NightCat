@@ -13,16 +13,18 @@ import { shrineTheme } from './themes/shrine.js';
 import { snowTheme } from './themes/snow.js';
 import { harbourTheme } from './themes/harbour.js';
 import { gardenTheme } from './themes/garden.js';
+import { cityTheme } from './themes/city.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme, city: cityTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
 const JUMP_V = 11.5;
 const JUMP_CUT_V = 4.0;
 const DIVE_V = -13;
+const BOUNCE_V = 14; // an awning's throw: ≈3.3u up, and no cutting it short
 const COYOTE = 0.1;
 const BUFFER = 0.13;
 const STEP_TOL = 0.35; // small ledges are climbed automatically; anything taller is a wall
@@ -251,6 +253,13 @@ export class Game {
         this.ui.toast('old boards ahead — they give way a moment after you land: jump off them', 2200);
       }
     }
+    if (!this.hints.bouncy) {
+      const b = level.bouncy.find((pl) => pl.x0 > p.x && pl.x0 - p.x < 10);
+      if (b) {
+        this.hints.bouncy = true;
+        this.ui.toast('an awning below — drop onto it and it throws you high', 2200);
+      }
+    }
     if (!this.hints.gap) {
       const first = level.platforms[0];
       if (first.x1 - p.x < 5) {
@@ -285,6 +294,7 @@ export class Game {
     p.groundY = p.y;
     p.sliding = false;
     p.diving = false;
+    p.bounced = false;
     p.forceSlide = 0;
     p.slideGrace = 0;
     p.deathKind = null;
@@ -418,7 +428,7 @@ export class Game {
 
     const prevY = p.y;
     if (!p.grounded) {
-      if (!input.jumpHeld && p.vy > JUMP_CUT_V) p.vy = JUMP_CUT_V;
+      if (!input.jumpHeld && p.vy > JUMP_CUT_V && !p.bounced) p.vy = JUMP_CUT_V;
       p.vy -= GRAVITY * h;
       p.y += p.vy * h;
     }
@@ -449,15 +459,22 @@ export class Game {
     // support
     if (p.grounded) {
       let top = -Infinity;
+      let under = null;
       for (const pl of level.platforms) {
         if (pl.gone) continue;
-        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL) top = Math.max(top, pl.top);
+        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && Math.abs(pl.top - p.y) <= STEP_TOL && pl.top > top) {
+          top = pl.top;
+          under = pl;
+        }
       }
       if (top === -Infinity) {
         p.grounded = false;
         p.sliding = false;
         p.coyote = COYOTE;
         p.vy = 0;
+      } else if (under.bouncy) {
+        p.y = top;
+        this.bounce(under);
       } else {
         p.y = top;
         p.groundY = top;
@@ -466,16 +483,24 @@ export class Game {
     } else if (p.vy <= 0) {
       // land when the feet cross a top this step; a near miss just below the ledge counts too
       let top = -Infinity;
+      let under = null;
       for (const pl of level.platforms) {
         if (pl.gone) continue;
-        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && pl.top <= prevY + STEP_TOL && pl.top >= p.y) top = Math.max(top, pl.top);
+        if (pl.x1 > p.x - FOOT && pl.x0 < p.x + FOOT && pl.top <= prevY + STEP_TOL && pl.top >= p.y && pl.top > top) {
+          top = pl.top;
+          under = pl;
+        }
       }
-      if (top > -Infinity) {
+      if (under?.bouncy) {
+        p.y = top;
+        this.bounce(under);
+      } else if (top > -Infinity) {
         const impact = -p.vy;
         p.y = top;
         p.groundY = top;
         p.vy = 0;
         p.grounded = true;
+        p.bounced = false;
         if (p.diving) {
           p.diving = false;
           p.forceSlide = 0.28;
@@ -552,6 +577,25 @@ export class Game {
     }
 
     if (p.x >= level.goalX) this.clearStage();
+  }
+
+  /** An awning throws the cat up the moment it lands on it. */
+  bounce(pl) {
+    const p = this.p;
+    p.vy = BOUNCE_V;
+    p.grounded = false;
+    p.bounced = true;
+    p.diving = false;
+    p.sliding = false;
+    p.forceSlide = 0;
+    p.coyote = 0;
+    p.buffer = 0;
+    p.groundY = pl.top;
+    this.cat.onLand();
+    this.cat.onJump();
+    this.sfx.bounce();
+    this.theme.onBounce?.(pl, p.x);
+    this.world.puff(p.x, pl.top, 4, 0.7);
   }
 
   /** Standing on boards starts their countdown (once). */
@@ -708,6 +752,7 @@ export class Game {
     const trace = [];
     let wasGrounded = true;
     let wasSliding = false;
+    let wasBounced = false;
     while (this.state === 'run' && t < maxSeconds) {
       this.stepRun(STEP);
       t += STEP;
@@ -719,6 +764,10 @@ export class Game {
       if (p.sliding !== wasSliding) {
         wasSliding = p.sliding;
         if (wasSliding) trace.push(`slide@${p.x.toFixed(1)}`);
+      }
+      if (p.bounced !== wasBounced) {
+        wasBounced = p.bounced;
+        if (wasBounced) trace.push(`bounce@${p.x.toFixed(1)},${p.y.toFixed(2)}`);
       }
     }
     this.autopilot = wasAuto;

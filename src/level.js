@@ -14,6 +14,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
     obstacles: [],
     hangers: [],
     brittle: [],
+    bouncy: [],
     sparks: [],
     checkpoints: [],
     fixtures: [],
@@ -29,6 +30,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
   let x = 0;
   let prevTop = 0;
   let lastWasGap = false;
+  let prevBouncy = false;
   let gapStart = 0;
 
   for (const it of stage.layout()) {
@@ -52,6 +54,11 @@ export function buildLevel(scene, stage, theme, tex, rng) {
       level.platforms.push(pl);
       level.brittle.push(pl);
       level.sparks.push({ x: x0 + (x1 - x0) * 0.55, y: top + 1.3 });
+    } else if (it.bouncy) {
+      // an awning: it throws the cat up as soon as it lands on it
+      const pl = { x0, x1, top, bouncy: true, part: theme.buildBouncy(level.group, x0, x1, top, rng) };
+      level.platforms.push(pl);
+      level.bouncy.push(pl);
     } else {
       theme.buildPlatform(level.group, x0, x1, top, rng, level.platforms.length);
       level.platforms.push({ x0, x1, top });
@@ -71,8 +78,8 @@ export function buildLevel(scene, stage, theme, tex, rng) {
       }
     }
 
-    // sparks over gaps and above obstacles
-    if (lastWasGap) level.sparks.push({ x: (gapStart + x0) / 2, y: Math.max(prevTop, top) + 1.5 });
+    // sparks over gaps (high on the throw from an awning) and above obstacles
+    if (lastWasGap) level.sparks.push({ x: (gapStart + x0) / 2, y: prevBouncy ? prevTop + 3.0 : Math.max(prevTop, top) + 1.5 });
     for (const o of it.obs) {
       if (o.kind !== 'cp' && !theme.hanging.has(o.kind) && rng() < 0.6) {
         level.sparks.push({ x: ax(o), y: top + 1.55 });
@@ -84,6 +91,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
 
     x = x1;
     prevTop = top;
+    prevBouncy = !!it.bouncy;
     lastWasGap = false;
   }
 
