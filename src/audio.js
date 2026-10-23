@@ -1,4 +1,4 @@
-// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour / garden / desert town) and one-shot sounds. No samples.
+// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour / garden / desert town / night train) and one-shot sounds. No samples.
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -38,7 +38,7 @@ export class Sfx {
     return buf;
   }
 
-  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III), 'harbour' (stage IV), 'garden' (stage V) or 'city' (stage VI). */
+  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III), 'harbour' (stage IV), 'garden' (stage V), 'city' (stage VI) or 'train' (stage VII). */
   setAmbience(kind) {
     this.wantAmbience = kind;
     if (!this.ctx || kind === this.ambKind) return;
@@ -53,10 +53,10 @@ export class Sfx {
 
     // pad: slow detuned oscillators under a low-pass, breathing gently
     const padGain = ctx.createGain();
-    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' || kind === 'garden' || kind === 'city' ? 0.03 : 0.035;
+    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' || kind === 'garden' || kind === 'city' || kind === 'train' ? 0.03 : 0.035;
     const padLp = ctx.createBiquadFilter();
     padLp.type = 'lowpass';
-    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420, garden: 440, city: 360 }[kind];
+    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420, garden: 440, city: 360, train: 340 }[kind];
     padLp.connect(padGain).connect(out);
     const chord = {
       rain: [55, 82.6, 110.4],
@@ -65,6 +65,7 @@ export class Sfx {
       harbour: [55, 82.4, 110, 138.6, 164.8],
       garden: [73.4, 110, 146.8, 185, 220],
       city: [58.27, 87.31, 116.54, 174.61],
+      train: [49, 73.4, 98, 123.5, 146.8],
     }[kind];
     for (const f of chord) {
       const o = ctx.createOscillator();
@@ -250,6 +251,40 @@ export class Sfx {
         this.ambTimer = setTimeout(night, wait);
       };
       this.ambTimer = setTimeout(night, 800);
+    } else if (kind === 'train') {
+      // the rumble of the train under the cat (louder in a tunnel), wind over the roofs
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 180;
+      const rumble = ctx.createGain();
+      rumble.gain.value = 0.07;
+      noise.connect(lp).connect(rumble).connect(out);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 700;
+      bp.Q.value = 0.4;
+      const wind = ctx.createGain();
+      wind.gain.value = 0.014;
+      noise.connect(bp).connect(wind).connect(out);
+      this.trainRumble = rumble;
+      this.trainOut = out;
+      // the wheels clacking over the rail joints, two bogies at a time; now and then the engine whistles far ahead
+      let whistle = 9;
+      const clack = () => {
+        if (this.ambKind !== 'train') return;
+        const loud = 1 + 1.2 * (this.trainTunnel || 0);
+        for (const d of [0, 0.11, 0.42, 0.53]) {
+          this._noise(0.035, { freq: 1900, q: 1.5, vol: 0.035 * loud, delay: d, dest: out });
+          this._tone(85, { type: 'triangle', dur: 0.06, vol: 0.05 * loud, delay: d, dest: out });
+        }
+        whistle -= 0.86;
+        if (whistle <= 0) {
+          this.trainWhistle(0.35, out);
+          whistle = 20 + Math.random() * 20;
+        }
+        this.ambTimer = setTimeout(clack, 860);
+      };
+      this.ambTimer = setTimeout(clack, 300);
     } else {
       // wind through trees: low noise with a slow swell
       const lp = ctx.createBiquadFilter();
@@ -304,6 +339,12 @@ export class Sfx {
     this.amb = nodes;
   }
 
+  /** Stage VII: how far into a tunnel the train is (0–1): the rumble and the clacks swell. */
+  setTunnel(k) {
+    this.trainTunnel = k;
+    if (this.trainRumble && this.ambKind === 'train') this.trainRumble.gain.setTargetAtTime(0.07 + 0.11 * k, this.ctx.currentTime, 0.2);
+  }
+
   stopAmbience() {
     if (this.ambTimer) clearTimeout(this.ambTimer);
     this.ambTimer = null;
@@ -326,7 +367,7 @@ export class Sfx {
     this.ambKind = null;
   }
 
-  _tone(freq, { type = 'sine', dur = 0.2, vol = 0.3, slide = 0, attack = 0.005, delay = 0 } = {}) {
+  _tone(freq, { type = 'sine', dur = 0.2, vol = 0.3, slide = 0, attack = 0.005, delay = 0, dest = null } = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + delay;
@@ -338,7 +379,7 @@ export class Sfx {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(dest || this.master);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -391,7 +432,7 @@ export class Sfx {
     o.stop(t + dur + 0.05);
   }
 
-  _noise(dur, { freq = 400, q = 1, vol = 0.3, type = 'bandpass', delay = 0 } = {}) {
+  _noise(dur, { freq = 400, q = 1, vol = 0.3, type = 'bandpass', delay = 0, dest = null } = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + delay;
@@ -407,7 +448,7 @@ export class Sfx {
     f.Q.value = q;
     const g = ctx.createGain();
     g.gain.value = vol;
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(dest || this.master);
     src.start(t);
   }
 
@@ -512,6 +553,41 @@ export class Sfx {
   /** Doves taking off: a clatter of wings. */
   flutter() {
     for (let i = 0; i < 7; i++) this._noise(0.05, { freq: 900 + Math.random() * 700, q: 0.8, vol: 0.05, delay: i * 0.055 + Math.random() * 0.02 });
+  }
+  /** A steam whistle: three detuned reeds in a chord, rising into the note and falling off at the end. */
+  trainWhistle(vol = 1, dest = null) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(0.03 * vol, t + 0.12);
+    out.gain.setValueAtTime(0.03 * vol, t + 1.1);
+    out.gain.exponentialRampToValueAtTime(0.0005, t + 1.6);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 1.2;
+    bp.connect(out).connect(dest || this.master);
+    for (const f of [440, 523, 659]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 0.94, t);
+      o.frequency.linearRampToValueAtTime(f, t + 0.15);
+      o.frequency.setValueAtTime(f, t + 1.2);
+      o.frequency.linearRampToValueAtTime(f * 0.96, t + 1.6);
+      o.connect(bp);
+      o.start(t);
+      o.stop(t + 1.65);
+    }
+  }
+  /** A level crossing's bell going past: dings that fall in pitch as it slips away behind. */
+  crossing() {
+    for (let i = 0; i < 9; i++) this._bell(1180 * Math.pow(0.97, i), { vol: 0.03 * (1 - i / 11), dur: 0.5, delay: i * 0.22 });
+  }
+  /** A gasp of steam. */
+  steam() {
+    this._noise(1.2, { freq: 3200, q: 0.4, vol: 0.12, type: 'highpass' });
   }
   /** A shooting star: a faint high shimmer falling away. */
   meteor(vol = 1) {

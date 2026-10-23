@@ -1247,3 +1247,161 @@ export function reedTexture(rng) {
   addNoise(g, W, W, 16, rng);
   return finish(c);
 }
+
+/**
+ * A circus wagon's painted side: a field of colour inside a gilded border with
+ * scrolls at the corners, stars scattered about and a name in gold letters.
+ */
+export function circusPanelTexture(rng, bg, text) {
+  const W = 512;
+  const H = 128;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#e8c060';
+  g.lineWidth = 5;
+  g.strokeRect(10, 10, W - 20, H - 20);
+  g.lineWidth = 2;
+  g.strokeRect(20, 20, W - 40, H - 40);
+  // scrolls in the corners
+  for (const [x, y] of [
+    [20, 20],
+    [W - 20, 20],
+    [20, H - 20],
+    [W - 20, H - 20],
+  ]) {
+    g.fillStyle = '#e8c060';
+    g.beginPath();
+    g.arc(x, y, 9, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = bg;
+    g.beginPath();
+    g.arc(x, y, 4, 0, Math.PI * 2);
+    g.fill();
+  }
+  const star = (cx, cy, r, col) => {
+    g.fillStyle = col;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 ? r * 0.42 : r;
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    g.fill();
+  };
+  for (let i = 0; i < 14; i++) star(30 + rng() * (W - 60), 28 + rng() * (H - 56), 3 + rng() * 4, 'rgba(255, 236, 170, 0.55)');
+  // the name, as large as fits
+  let size = 58;
+  g.font = `bold ${size}px Georgia, 'Times New Roman', serif`;
+  while (g.measureText(text).width > W - 90 && size > 20) {
+    size -= 2;
+    g.font = `bold ${size}px Georgia, 'Times New Roman', serif`;
+  }
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineWidth = 6;
+  g.strokeStyle = 'rgba(30, 10, 6, 0.8)';
+  g.strokeText(text, W / 2, H / 2 + 3);
+  const gold = g.createLinearGradient(0, H / 2 - size / 2, 0, H / 2 + size / 2);
+  gold.addColorStop(0, '#fff0b0');
+  gold.addColorStop(0.5, '#e8b848');
+  gold.addColorStop(1, '#b07820');
+  g.fillStyle = gold;
+  g.fillText(text, W / 2, H / 2 + 3);
+  addNoise(g, W, H, 12, rng);
+  return finish(c, { repeat: false });
+}
+
+/** A spoked wheel seen side on: red rim, yellow spokes, an iron tyre. For a wheel's caps. */
+export function wheelTexture() {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  const r = W / 2;
+  g.fillStyle = '#1a1614';
+  g.fillRect(0, 0, W, W);
+  g.fillStyle = '#b8242a';
+  g.beginPath();
+  g.arc(r, r, r - 6, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#22140e';
+  g.beginPath();
+  g.arc(r, r, r - 16, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#e8c048';
+  g.lineWidth = 7;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(r, r);
+    g.lineTo(r + Math.cos(a) * (r - 16), r + Math.sin(a) * (r - 16));
+    g.stroke();
+  }
+  g.fillStyle = '#e8c048';
+  g.beginPath();
+  g.arc(r, r, 12, 0, Math.PI * 2);
+  g.fill();
+  return finish(c, { repeat: false });
+}
+
+/** Little stars on a ground colour (circus tubs, a drum's heads). */
+export function starsTexture(rng, bg, fg) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, W);
+  g.fillStyle = fg;
+  for (let k = 0; k < 9; k++) {
+    const cx = ((k % 3) + 0.5 + (Math.floor(k / 3) % 2) * 0.5) * (W / 3);
+    const cy = (Math.floor(k / 3) + 0.5) * (W / 3);
+    const rr = 11 + rng() * 3;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 ? rr * 0.42 : rr;
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      g.lineTo((cx % W) + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+    }
+    g.fill();
+  }
+  return finish(c);
+}
+
+/** A field in moonlight: rows running across, a little ragged. Tiles both ways. 1 tile ≈ 4u. */
+export function fieldTexture(rng, base, row) {
+  const W = 128;
+  const c = canvas(W, W);
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, W, W);
+  for (let y = 0; y < W; y += 8) {
+    g.fillStyle = row;
+    g.fillRect(0, y + rng() * 2, W, 3);
+  }
+  for (let i = 0; i < 600; i++) {
+    g.fillStyle = `rgba(${rng() < 0.5 ? '0,0,0' : '255,255,230'}, ${0.04 + rng() * 0.08})`;
+    g.fillRect(rng() * W, rng() * W, 1 + rng() * 2, 1 + rng() * 3);
+  }
+  addNoise(g, W, W, 10, rng);
+  return finish(c);
+}
+
+/** An enamel station sign: white letters on deep blue, a white border. */
+export function signTexture(text) {
+  const W = 512;
+  const H = 96;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#1a2a5a';
+  g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#f0f0e8';
+  g.lineWidth = 5;
+  g.strokeRect(8, 8, W - 16, H - 16);
+  g.fillStyle = '#f0f0e8';
+  g.font = `bold 48px Georgia, 'Times New Roman', serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, W / 2, H / 2 + 3);
+  return finish(c, { repeat: false });
+}

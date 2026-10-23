@@ -331,10 +331,10 @@ kbd {
   flex-wrap: wrap;
 }
 .card {
-  /* six across: the screen's padding and five gaps shared out */
-  width: min(190px, calc((100vw - 156px) / 6));
+  /* seven across: the screen's padding and six gaps shared out */
+  width: min(180px, calc((100vw - 174px) / 7));
   min-width: 0;
-  padding: 20px 16px 16px;
+  padding: 20px 14px 16px;
   border: 1px solid rgba(233, 228, 216, 0.18);
   background: rgba(6, 7, 15, 0.45);
   backdrop-filter: blur(6px);
@@ -486,14 +486,14 @@ body.touch button.touch-only {
   display: inline-block;
 }
 
-/* six across still fits a landscape phone with a little less air */
+/* seven across still fits a landscape phone with a little less air */
 @media (max-width: 900px) {
   .cards {
     gap: 10px;
   }
   .card {
-    width: calc((100vw - 104px) / 6);
-    padding: 16px 10px 12px;
+    width: calc((100vw - 114px) / 7);
+    padding: 14px 8px 10px;
   }
 }
 @media (max-width: 640px) {
@@ -515,11 +515,18 @@ body.touch button.touch-only {
   .cards {
     gap: 10px;
   }
-  /* two across */
+  /* three across */
   .card {
-    width: calc(50% - 5px);
+    width: calc((100% - 20px) / 3);
     min-width: 0;
-    padding: 14px 12px 12px;
+    padding: 12px 8px 10px;
+  }
+  .card-name {
+    font-size: 16px;
+  }
+  .card-record {
+    font-size: 10px;
+    letter-spacing: 0.04em;
   }
 }
 @media (max-height: 460px) {

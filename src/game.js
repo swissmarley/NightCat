@@ -14,10 +14,11 @@ import { snowTheme } from './themes/snow.js';
 import { harbourTheme } from './themes/harbour.js';
 import { gardenTheme } from './themes/garden.js';
 import { cityTheme } from './themes/city.js';
+import { trainTheme } from './themes/train.js';
 import { loadSave, storeSave, recordRun } from './save.js';
 import { makeRng, glowTexture, mistTexture } from './textures.js';
 
-const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme, city: cityTheme };
+const THEMES = { street: streetTheme, shrine: shrineTheme, snow: snowTheme, harbour: harbourTheme, garden: gardenTheme, city: cityTheme, train: trainTheme };
 
 const STEP = 1 / 120;
 const GRAVITY = 30;
@@ -257,7 +258,7 @@ export class Game {
       const b = level.bouncy.find((pl) => pl.x0 > p.x && pl.x0 - p.x < 10);
       if (b) {
         this.hints.bouncy = true;
-        this.ui.toast('an awning below — drop onto it and it throws you high', 2200);
+        this.ui.toast(this.theme.bouncyHint || 'an awning below — drop onto it and it throws you high', 2200);
       }
     }
     if (!this.hints.gap) {
