@@ -1,4 +1,4 @@
-// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour / garden / desert town / night train) and one-shot sounds. No samples.
+// Tiny WebAudio synth: ambience beds (rain / mountain night / snow / harbour / garden / desert town / night train / monastery) and one-shot sounds. No samples.
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -38,7 +38,7 @@ export class Sfx {
     return buf;
   }
 
-  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III), 'harbour' (stage IV), 'garden' (stage V), 'city' (stage VI) or 'train' (stage VII). */
+  /** Switch the ambience bed: 'rain' (stage I), 'night' (stage II), 'snow' (stage III), 'harbour' (stage IV), 'garden' (stage V), 'city' (stage VI), 'train' (stage VII) or 'monastery' (stage VIII). */
   setAmbience(kind) {
     this.wantAmbience = kind;
     if (!this.ctx || kind === this.ambKind) return;
@@ -53,10 +53,10 @@ export class Sfx {
 
     // pad: slow detuned oscillators under a low-pass, breathing gently
     const padGain = ctx.createGain();
-    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' || kind === 'garden' || kind === 'city' || kind === 'train' ? 0.03 : 0.035;
+    padGain.gain.value = kind === 'rain' ? 0.045 : kind === 'harbour' || kind === 'garden' || kind === 'city' || kind === 'train' || kind === 'monastery' ? 0.03 : 0.035;
     const padLp = ctx.createBiquadFilter();
     padLp.type = 'lowpass';
-    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420, garden: 440, city: 360, train: 340 }[kind];
+    padLp.frequency.value = { rain: 260, night: 320, snow: 380, harbour: 420, garden: 440, city: 360, train: 340, monastery: 300 }[kind];
     padLp.connect(padGain).connect(out);
     const chord = {
       rain: [55, 82.6, 110.4],
@@ -66,6 +66,7 @@ export class Sfx {
       garden: [73.4, 110, 146.8, 185, 220],
       city: [58.27, 87.31, 116.54, 174.61],
       train: [49, 73.4, 98, 123.5, 146.8],
+      monastery: [55, 82.4, 110, 164.8],
     }[kind];
     for (const f of chord) {
       const o = ctx.createOscillator();
@@ -285,6 +286,54 @@ export class Sfx {
         this.ambTimer = setTimeout(clack, 860);
       };
       this.ambTimer = setTimeout(clack, 300);
+    } else if (kind === 'monastery') {
+      // the wind on the heights: a rush that gusts and drops, a thin whistle over the ridges
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 520;
+      const g = ctx.createGain();
+      g.gain.value = 0.045;
+      const swell = ctx.createOscillator();
+      swell.frequency.value = 0.06;
+      const swellGain = ctx.createGain();
+      swellGain.gain.value = 0.03;
+      swell.connect(swellGain).connect(g.gain);
+      swell.start();
+      noise.connect(lp).connect(g).connect(out);
+      const whistle = ctx.createBiquadFilter();
+      whistle.type = 'bandpass';
+      whistle.frequency.value = 1100;
+      whistle.Q.value = 10;
+      const wander = ctx.createOscillator();
+      wander.frequency.value = 0.037;
+      const wanderDepth = ctx.createGain();
+      wanderDepth.gain.value = 320;
+      wander.connect(wanderDepth).connect(whistle.frequency);
+      wander.start();
+      const wg = ctx.createGain();
+      wg.gain.value = 0.012;
+      noise.connect(whistle).connect(wg).connect(out);
+      nodes.push(swell, wander);
+      // far off in the monastery: the long horns now and then, a hand bell, prayer flags snapping in a gust
+      let horn = 6;
+      let bell = 4;
+      const step = () => {
+        if (this.ambKind !== 'monastery') return;
+        horn -= 1;
+        bell -= 1;
+        if (horn <= 0) {
+          this.horn(0.45, out);
+          horn = 24 + Math.random() * 16;
+        }
+        if (bell <= 0) {
+          const f = 1480 + Math.random() * 300;
+          for (let i = 0; i < 3; i++) this._bell(f, { vol: 0.012, dur: 1.4, dest: out, delay: i * 0.32 });
+          bell = 8 + Math.random() * 8;
+        }
+        if (Math.random() < 0.25) for (let i = 0; i < 5; i++) this._noise(0.05, { freq: 700 + Math.random() * 500, q: 0.7, vol: 0.02, delay: i * 0.07 + Math.random() * 0.03, dest: out });
+        this.ambTimer = setTimeout(step, 1000);
+      };
+      this.ambTimer = setTimeout(step, 1000);
     } else {
       // wind through trees: low noise with a slow swell
       const lp = ctx.createBiquadFilter();
@@ -588,6 +637,67 @@ export class Sfx {
   /** A gasp of steam. */
   steam() {
     this._noise(1.2, { freq: 3200, q: 0.4, vol: 0.12, type: 'highpass' });
+  }
+  /** A gust of wind rising out of a gorge: a rush that sweeps up and dies away. */
+  gust() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this._noiseBuffer(1.4);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 0.8;
+    f.frequency.setValueAtTime(320, t);
+    f.frequency.exponentialRampToValueAtTime(1500, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t);
+    src.stop(t + 1.4);
+  }
+  /** A gong: a low hum under a bright, shimmering strike, ringing on a long time. */
+  gong(vol = 1) {
+    this._bell(196, { vol: 0.05 * vol, dur: 4.5 });
+    this._bell(201, { vol: 0.03 * vol, dur: 3.5 });
+    this._tone(98, { dur: 3.2, vol: 0.05 * vol, attack: 0.05 });
+  }
+  /** The long horns of the monastery: a pair of low brassy notes swelling in and dying away. */
+  horn(vol = 1, dest = null) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(0.05 * vol, t + 0.9);
+    out.gain.setValueAtTime(0.05 * vol, t + 2.6);
+    out.gain.exponentialRampToValueAtTime(0.0005, t + 3.8);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+    lp.Q.value = 3;
+    lp.connect(out).connect(dest || this.master);
+    for (const f of [58, 58.6, 116.4]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 0.97, t);
+      o.frequency.linearRampToValueAtTime(f, t + 0.6);
+      o.connect(lp);
+      o.start(t);
+      o.stop(t + 3.9);
+    }
+  }
+  /** Thunder far down in the clouds: a long low roll. */
+  thunder(vol = 1, delay = 0) {
+    this._noise(2.6, { freq: 140, q: 0.5, vol: 0.18 * vol, type: 'lowpass', delay });
+    this._noise(1.2, { freq: 90, q: 0.5, vol: 0.12 * vol, type: 'lowpass', delay: delay + 0.6 });
+  }
+  /** A prayer wheel set turning: its little bell, and the rattle of the axle. */
+  wheel() {
+    this._bell(1760, { vol: 0.014, dur: 1.0 });
+    for (let i = 0; i < 4; i++) this._noise(0.03, { freq: 1400, q: 2, vol: 0.025, delay: 0.05 + i * 0.09 });
   }
   /** A shooting star: a faint high shimmer falling away. */
   meteor(vol = 1) {

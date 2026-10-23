@@ -3,8 +3,9 @@
 A moody 3D side-scrolling auto-runner. A cat runs through the night — along the walls of a
 rain-slicked street, over a lake to a mountain shrine, across the snowy roofs of a hill town,
 over the boats of a fishing harbour on a festival night, through a botanical garden in
-spring, over the blue roofs of a desert town, then along a circus train crossing the country
-by moonlight — and the screen never stops. Two verbs: jump and slide.
+spring, over the blue roofs of a desert town, along a circus train crossing the country by
+moonlight, then over the roofs of a monastery on the cliffs above a sea of clouds — and the
+screen never stops. Two verbs: jump and slide.
 
 Built with [three.js](https://threejs.org) and [Vite](https://vite.dev). No art assets —
 the cat, the stages, the textures and the sound are all generated in code. Plays on
@@ -36,10 +37,13 @@ running off an edge) are built in, and a landing that just barely misses a ledge
 counts. A cat always finds the ledge. Hanging things (washing lines, signs, ropes, low
 branches, garlands, bells, drying fish, paper lanterns, wisteria, hanging baskets, wind
 chimes, rugs hung out to air, brass lanterns, strings of peppers, bunting, a trapeze, strings
-of bulbs) only block what you can see: slide under them, or clear them with a high jump. Old
-boards laid across an alley hold for a moment after you land on them, then give way: jump off
-them in time. The striped awnings of market stalls (and the circus train's trampolines) throw
-the cat high the moment it lands on them — no need to jump.
+of bulbs, prayer flags, victory banners, a gong) only block what you can see: slide under
+them, or clear them with a high jump. Old boards laid across an alley hold for a moment after
+you land on them, then give way: jump off them in time. The striped awnings of market stalls
+(and the circus train's trampolines) throw the cat high the moment it lands on them — no need
+to jump. In the gorges of the cloud monastery the wind blows up out of the clouds: jump into
+it (or just run off the edge) and it carries the cat up and over to the far side, however it
+went in; dive to drop out of it.
 
 ### The stages
 
@@ -86,8 +90,20 @@ the cat high the moment it lands on them — no need to jump.
   way; trampolines on the flatcars that throw you up onto the tall cars. The country rushes
   by — telegraph poles, fields and haystacks, a farm, a windmill, a village on the hills — a
   station and level crossings sweep past, two tunnels put the moon out, and the engine's smoke
-  streams back over the train. At the front, by the engine, a family waits on a blanket. The
-  fastest and longest night, three lanterns.
+  streams back over the train. At the front, by the engine, a family waits on a blanket. A
+  long night, three lanterns.
+- **VIII · the cloud monastery** — along the flat roofs of a monastery on the cliffs above a
+  sea of clouds, under a big moon over the snow peaks: whitewashed walls under the dark red
+  band with its gilt mirrors, black-framed windows lit by butter lamps, towers with gilt
+  roofs, rock pinnacles standing up out of the clouds. Mani stones, prayer wheels (they spin
+  as you jump them), copper pots, incense burners and little chortens to jump; prayer flags,
+  victory banners and a gong (it rings as you pass) to slide under; what is left of old rope
+  bridges, their planks giving way; and the gorges between the cliffs, where the wind blows
+  up out of the clouds and carries you over — once gorge, pinnacle, gorge — paper prayer
+  horses whirling up with you. Lightning flickers down in the clouds, more of the monastery
+  stands on the far pinnacles with flags strung between them, a snow leopard watches from a
+  crag, monastery cats doze on the roofs, and at the great hall a family waits by the lamps
+  with a bowl of milk. The fastest and longest night, three lanterns.
 
 Each stage has lanterns that act as **checkpoints** — stumble, and you can continue from
 the last lantern. Collect the floating **sparks** on the way. Clearing a stage gives a rank
@@ -126,7 +142,14 @@ src/
                    wagons on flatcars, open wagons, trampolines), wheels that turn, marquee
                    bulbs, the country in strips that repeat and slide past, a station, level
                    crossings and tunnels sweeping by, engine smoke and embers, the engine
-  themes/cats.js   the cats in the scenery of stages IV to VII
+  themes/monastery.js stage VIII dressing: whitewashed buildings on their cliffs (the kemar band,
+                   rafter ends, Tibetan windows), towers with gilt pavilions, the monastery
+                   climbing the cliff behind, rock pinnacles, rope bridges, the gorges (tall
+                   flags, flags strung across, paper prayer horses and cloud blown up them),
+                   a sea of clouds (one shader-drawn sheet, billows, lightning inside it),
+                   snow peaks, far pinnacles with monasteries, prayer wheels that turn,
+                   fluttering flags (a vertex shader), the great hall, obstacles
+  themes/cats.js   the cats in the scenery of stages IV to VIII (and a snow leopard)
   cat.js           procedural cat (primitives) + procedural animation
   textures.js      canvas-generated textures (brick, moss stone, bark, asphalt, windows,
                    water normals, glow, mist, leaf, snow, plaster, roof tiles, aurora,
@@ -134,15 +157,17 @@ src/
                    blossom petal, a glasshouse's palms-and-lamplight interior, limewash,
                    striped awning canvas, rugs, pierced brass, sand, zellige, arched windows,
                    a studded door, reed matting, the Milky Way, circus wagon panels, spoked
-                   wheels, stars, fields, an enamel station sign)
+                   wheels, stars, fields, an enamel station sign, the kemar band with its
+                   mirrors, Tibetan windows, the block print on a prayer flag)
   input.js         keyboard + pointer/touch input
   audio.js         WebAudio synth: rain, mountain-night, winter-wind (with a distant church
                    bell), harbour (water against the quays, rigging on the masts) or garden
                    ambience (a breeze, frogs, now and then a nightingale) or desert-town
                    ambience (a warm wind, crickets, now and then an oud down in the town) or
                    the night train (its rumble, louder in tunnels, wheels clacking over the
-                   rail joints, a whistle far ahead), fireworks, wind chimes, a crossing
-                   bell, one-shot effects
+                   rail joints, a whistle far ahead) or the monastery (wind on the heights,
+                   the long horns far off, a hand bell, flags snapping), fireworks, wind
+                   chimes, a crossing bell, a gong, gusts, distant thunder, one-shot effects
   ui.js            DOM overlays (title, stage select, HUD, pause, game over, stage clear)
   save.js          localStorage records
 ```
@@ -163,7 +188,11 @@ src/
   shooting stars across it — a shower of them when the cat gets home. In stage VII the train
   stands still and the country moves: the scenery is built in strips that repeat and slide
   back at the train's speed (the far hills cheated slower, as if much further off), and a
-  tunnel dims the moon, the sky and the fog as it passes over.
+  tunnel dims the moon, the sky and the fog as it passes over. Stage VIII lays a sea of
+  clouds under everything — one sheet that follows the camera, its billows and dark hollows
+  drawn by noise in world space, lit from the moon's side, the moon's path across it — with
+  lightning flickering inside it now and then (and thunder a moment later), and prayer flags
+  that flutter in a vertex shader.
 - **Scenery cats.** Simpler cats than the hero, built from a handful of primitives, sitting,
   asleep or peeking out of a flowerpot or a water jar: awake ones turn their heads to watch
   the night cat go by (and otherwise the view) and flick their tails, a kitten bats at a
@@ -177,7 +206,10 @@ src/
   Old boards start a short countdown when first stood on (they sag and tremble meanwhile),
   then drop piece by piece into the alley. Awnings throw the cat up at a fixed speed the
   moment it lands on them (letting go of jump doesn't cut the throw short); the canvas sags
-  and springs back. Stage VII's trampolines are the same thing.
+  and springs back. Stage VII's trampolines are the same thing. Over a gorge with the wind in
+  it the cat's vertical speed is pulled towards the wind's — up below the float height, a
+  gentle sink above it — hard enough to catch a cat already falling, so it crosses from any
+  jump (or none) and the camera rises with it.
 - **Mobile.** Touch zones (left third slides, the rest jumps), a camera that keeps a constant
   horizontal field of view so portrait phones still see ahead, safe-area-aware HUD, a quality
   tier for phones (lower pixel ratio, half-resolution bloom, smaller reflection texture, fewer

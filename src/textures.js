@@ -1405,3 +1405,154 @@ export function signTexture(text) {
   g.fillText(text, W / 2, H / 2 + 3);
   return finish(c, { repeat: false });
 }
+
+/**
+ * The kemar: the band of dark red-brown under a monastery's roof, made of twigs
+ * packed end-on, with gilt mirrors set in it. One tile is 2u along the band and
+ * its full height; two mirrors to a tile.
+ */
+export function kemarTexture(rng) {
+  const W = 256;
+  const H = 64;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#3e1410';
+  g.fillRect(0, 0, W, H);
+  // the twig ends: fine upright strokes, a shade lighter or darker each
+  for (let i = 0; i < 900; i++) {
+    const l = rng();
+    g.strokeStyle = l < 0.5 ? `rgba(20, 4, 2, ${0.2 + rng() * 0.3})` : `rgba(${110 + rng() * 40}, ${40 + rng() * 20}, ${30 + rng() * 14}, ${0.12 + rng() * 0.2})`;
+    g.lineWidth = 1 + rng() * 1.5;
+    const x = rng() * W;
+    const y = rng() * H;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + (rng() - 0.5) * 1.5, y + 3 + rng() * 6);
+    g.stroke();
+  }
+  // a dark timber edge above and below
+  g.fillStyle = '#1a0a06';
+  g.fillRect(0, 0, W, 4);
+  g.fillRect(0, H - 4, W, 4);
+  // the mirrors: a gilt rim round a bright boss
+  for (const cx of [W * 0.25, W * 0.75]) {
+    const grad = g.createRadialGradient(cx - 3, H / 2 - 3, 1, cx, H / 2, 14);
+    grad.addColorStop(0, '#fff2c0');
+    grad.addColorStop(0.45, '#e0b050');
+    grad.addColorStop(1, '#6a4410');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(cx, H / 2, 13, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#3a2408';
+    g.lineWidth = 2;
+    g.stroke();
+  }
+  addNoise(g, W, H, 14, rng);
+  return finish(c);
+}
+
+/**
+ * A Tibetan window: a black surround, wider at the foot, round a painted lintel
+ * and a latticed frame; lit (butter lamps and lamplight) or dark. Transparent
+ * outside the surround, so it lies on a whitewashed wall.
+ */
+export function tibetanWindowTexture(lit) {
+  const W = 128;
+  const H = 160;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  // the black surround
+  g.fillStyle = '#100c0a';
+  g.beginPath();
+  g.moveTo(22, 18);
+  g.lineTo(W - 22, 18);
+  g.lineTo(W - 4, H - 4);
+  g.lineTo(4, H - 4);
+  g.closePath();
+  g.fill();
+  // the lintel: a little roof of rafter ends over rows of painted blocks
+  g.fillStyle = '#2a1408';
+  g.fillRect(14, 4, W - 28, 8);
+  const blocks = ['#b8282a', '#2a7a4a', '#2a4ab0', '#e0b030'];
+  for (let row = 0; row < 2; row++) {
+    for (let x = 16; x < W - 16; x += 8) {
+      g.fillStyle = blocks[(x / 8 + row * 2) % 4];
+      g.fillRect(x, 12 + row * 5, 6, 4);
+    }
+  }
+  // the frame and what is behind the glass
+  const fx = 34;
+  const fy = 40;
+  const fw = W - 68;
+  const fh = H - 70;
+  g.fillStyle = '#6a2418';
+  g.fillRect(fx - 6, fy - 6, fw + 12, fh + 12);
+  if (lit) {
+    const grad = g.createRadialGradient(W / 2, fy + fh * 0.65, 4, W / 2, fy + fh * 0.5, fh * 0.8);
+    grad.addColorStop(0, '#fff0b0');
+    grad.addColorStop(0.4, '#ffb048');
+    grad.addColorStop(1, '#8a3a10');
+    g.fillStyle = grad;
+  } else {
+    const grad = g.createLinearGradient(0, fy, 0, fy + fh);
+    grad.addColorStop(0, '#1e2a40');
+    grad.addColorStop(1, '#070a12');
+    g.fillStyle = grad;
+  }
+  g.fillRect(fx, fy, fw, fh);
+  // the lattice
+  g.strokeStyle = '#2a0e08';
+  g.lineWidth = 3;
+  for (let i = 1; i < 3; i++) {
+    g.beginPath();
+    g.moveTo(fx + (fw * i) / 3, fy);
+    g.lineTo(fx + (fw * i) / 3, fy + fh);
+    g.stroke();
+  }
+  for (let i = 1; i < 4; i++) {
+    g.beginPath();
+    g.moveTo(fx, fy + (fh * i) / 4);
+    g.lineTo(fx + fw, fy + (fh * i) / 4);
+    g.stroke();
+  }
+  return finish(c, { repeat: false });
+}
+
+/**
+ * The block print on a prayer flag, to be multiplied by the flag's colour: a
+ * wind horse in a ring at the middle and rows of mantra round it. Light ground.
+ */
+export function flagPrintTexture(rng) {
+  const W = 64;
+  const H = 80;
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4f0e8';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(40, 30, 30, 0.55)';
+  for (let y = 8; y < H - 6; y += 6) {
+    if (y > 24 && y < 52) continue;
+    for (let x = 6; x < W - 6; x += 3 + rng() * 3) g.fillRect(x, y, 1 + rng() * 2, 2 + rng() * 2);
+  }
+  g.strokeStyle = 'rgba(40, 30, 30, 0.6)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(W / 2, 38, 13, 0, Math.PI * 2);
+  g.stroke();
+  // the horse, as a few strokes: a back, a neck and head, four legs
+  g.beginPath();
+  g.moveTo(24, 38);
+  g.quadraticCurveTo(32, 33, 38, 36);
+  g.lineTo(41, 30);
+  for (const [x0, x1] of [[25, 24], [28, 28], [35, 36], [38, 40]]) {
+    g.moveTo(x0, 39);
+    g.lineTo(x1, 46);
+  }
+  g.stroke();
+  // the hem
+  g.fillStyle = 'rgba(40, 30, 30, 0.25)';
+  g.fillRect(0, H - 4, W, 4);
+  return finish(c, { repeat: false, anisotropy: 2 });
+}

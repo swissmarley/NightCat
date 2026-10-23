@@ -5,6 +5,19 @@ import * as THREE from 'three';
 export const WALK_DEPTH = 2.2;
 /** Seconds a brittle platform (old boards) holds after it is first stood on. */
 export const BRITTLE_DELAY = 0.4;
+/**
+ * Updrafts: in the air over a gorge marked `wind`, the cat is carried up at
+ * LIFT_V (u/s) until it floats LIFT_HEAD above the higher of the two sides;
+ * above that it sinks back no faster than LIFT_SINK. The wind brings the cat to
+ * those speeds at LIFT_A (u/s², against gravity), or faster the further off it
+ * is (LIFT_K per second), so it catches a cat falling into the gorge. A dive
+ * drops it out of the wind.
+ */
+export const LIFT_V = 3.3;
+export const LIFT_SINK = 3.0;
+export const LIFT_A = 55;
+export const LIFT_K = 8;
+export const LIFT_HEAD = 1.0;
 
 export function buildLevel(scene, stage, theme, tex, rng) {
   const level = {
@@ -15,6 +28,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
     hangers: [],
     brittle: [],
     bouncy: [],
+    lifts: [],
     sparks: [],
     checkpoints: [],
     fixtures: [],
@@ -32,12 +46,14 @@ export function buildLevel(scene, stage, theme, tex, rng) {
   let lastWasGap = false;
   let prevBouncy = false;
   let gapStart = 0;
+  let lift = null; // the updraft in the gap just crossed, if any
 
   for (const it of stage.layout()) {
     if (it.type === 'gap') {
       gapStart = x;
       x += it.len;
       lastWasGap = true;
+      lift = it.lift ? { x0: gapStart, x1: x } : null;
       continue;
     }
     const x0 = x;
@@ -78,8 +94,19 @@ export function buildLevel(scene, stage, theme, tex, rng) {
       }
     }
 
+    if (lift) {
+      // the wind over the gorge: it floats the cat a little above the higher side
+      lift.ceil = Math.max(prevTop, top) + LIFT_HEAD;
+      lift.part = theme.buildLift(level.group, lift.x0, lift.x1, prevTop, top, lift.ceil, rng);
+      level.lifts.push(lift);
+      // sparks along the ride: one at the top of a full jump into it, two where it floats
+      const len = lift.x1 - lift.x0;
+      level.sparks.push({ x: lift.x0 + len * 0.28, y: prevTop + 2.4 });
+      for (const u of [0.65, 0.9]) level.sparks.push({ x: lift.x0 + len * u, y: lift.ceil + 0.3 });
+    }
+
     // sparks over gaps (high on the throw from an awning) and above obstacles
-    if (lastWasGap) level.sparks.push({ x: (gapStart + x0) / 2, y: prevBouncy ? prevTop + 3.0 : Math.max(prevTop, top) + 1.5 });
+    if (lastWasGap && !lift) level.sparks.push({ x: (gapStart + x0) / 2, y: prevBouncy ? prevTop + 3.0 : Math.max(prevTop, top) + 1.5 });
     for (const o of it.obs) {
       if (o.kind !== 'cp' && !theme.hanging.has(o.kind) && rng() < 0.6) {
         level.sparks.push({ x: ax(o), y: top + 1.55 });
@@ -93,6 +120,7 @@ export function buildLevel(scene, stage, theme, tex, rng) {
     prevTop = top;
     prevBouncy = !!it.bouncy;
     lastWasGap = false;
+    lift = null;
   }
 
   level.endX = x;

@@ -59,7 +59,7 @@ const smoothstep = (e0, e1, x) => {
  * thing built from many small parts is a few draw calls. Only direct children
  * are merged; groups and sprites are left be.
  */
-function mergeByMaterial(group) {
+export function mergeByMaterial(group) {
   const byMat = new Map();
   for (const o of group.children) {
     if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material)) continue;
@@ -85,7 +85,7 @@ function mergeByMaterial(group) {
 }
 
 /** A line of points sagging between two ends. */
-function sag(x0, y0, x1, y1, z, drop, n) {
+export function sag(x0, y0, x1, y1, z, drop, n) {
   const pts = [];
   for (let i = 0; i <= n; i++) {
     const u = i / n;
